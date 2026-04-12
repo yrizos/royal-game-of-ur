@@ -18,3 +18,7 @@ fmt:
 # Build all workspace members
 build:
     cargo build --workspace
+
+# Remove build artifacts
+clean:
+    cargo clean

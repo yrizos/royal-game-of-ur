@@ -5,6 +5,8 @@
 *.md    text eol=lf
 *.json  text eol=lf
 
+Justfile text eol=lf
+
 *.png   binary
 *.jpg   binary
 *.jpeg  binary

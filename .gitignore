@@ -21,3 +21,9 @@ Icon
 !.vscode/extensions.json
 *.code-workspace
 .history/
+
+# rust-analyzer
+.rust-analyzer/
+
+# Cargo.lock is committed because this workspace will contain a binary crate (ur-desktop)
+# when it is added. Library-only workspaces conventionally omit it.
