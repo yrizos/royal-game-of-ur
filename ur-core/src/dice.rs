@@ -9,10 +9,11 @@ pub struct Dice(pub u8);
 impl Dice {
     /// Generates a random dice roll using the caller-provided RNG.
     ///
-    /// Each of the four dice is independently 50/50, so the result follows
-    /// a binomial distribution B(4, 0.5).
+    /// Simulates four independent fair binary dice (each 50/50), returning
+    /// their sum — a binomial B(4, 0.5) distribution producing values 0–4.
     pub fn roll(rng: &mut impl Rng) -> Self {
-        todo!()
+        let count: u8 = (0..4).map(|_| rng.gen::<bool>() as u8).sum();
+        Dice(count)
     }
 
     /// Returns the numeric value of this roll (0–4).
@@ -40,26 +41,45 @@ mod tests {
 
     #[test]
     fn test_dice_value_always_0_to_4() {
-        // Roll 10_000 times with a seeded RNG; every result must be in 0..=4
-        todo!()
+        let mut rng = StdRng::seed_from_u64(0);
+        for _ in 0..10_000 {
+            let roll = Dice::roll(&mut rng);
+            assert!(roll.value() <= 4, "roll {} out of range", roll.value());
+        }
     }
 
     #[test]
     fn test_dice_probabilities_sum_to_1() {
-        // DICE_PROBABILITIES must sum to exactly 1.0 (within floating-point tolerance)
-        todo!()
+        let sum: f64 = DICE_PROBABILITIES.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-10, "probabilities sum to {}, not 1.0", sum);
     }
 
     #[test]
     fn test_dice_probability_distribution_matches_binomial() {
-        // Roll 100_000 times; observed frequencies must be within 2% of expected.
-        // Use seed 42 for reproducibility.
-        todo!()
+        let mut rng = StdRng::seed_from_u64(42);
+        let n = 100_000usize;
+        let mut counts = [0usize; 5];
+        for _ in 0..n {
+            counts[Dice::roll(&mut rng).value() as usize] += 1;
+        }
+        for (val, &count) in counts.iter().enumerate() {
+            let observed = count as f64 / n as f64;
+            let expected = DICE_PROBABILITIES[val];
+            let diff = (observed - expected).abs();
+            assert!(
+                diff < 0.02,
+                "roll {} observed {:.4} expected {:.4} diff {:.4} > 2%",
+                val, observed, expected, diff
+            );
+        }
     }
 
     #[test]
     fn test_dice_roll_is_deterministic_given_seed() {
-        // Two RNGs with the same seed must produce the same sequence of rolls
-        todo!()
+        let mut rng_a = StdRng::seed_from_u64(999);
+        let mut rng_b = StdRng::seed_from_u64(999);
+        for _ in 0..1000 {
+            assert_eq!(Dice::roll(&mut rng_a), Dice::roll(&mut rng_b));
+        }
     }
 }
