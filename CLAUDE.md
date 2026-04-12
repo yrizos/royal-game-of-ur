@@ -1,20 +1,20 @@
 # Royal Game of Ur
 
-A Rust workspace containing a reusable game logic library and a desktop application for the Royal Game of Ur, one of the oldest known board games (circa 2600 BCE, Mesopotamia).
+A Rust workspace containing a reusable game logic library and a terminal application for the Royal Game of Ur, one of the oldest known board games (circa 2600 BCE, Mesopotamia).
 
 ## Project Structure
 
 ```
 royal-game-of-ur/
-  ur-core/       # Library crate: pure game logic, no I/O
-  ur-desktop/    # Binary crate: macroquad desktop app, depends on ur-core
+  ur-core/    # Library crate: pure game logic, no I/O
+  ur-cli/     # Binary crate: ratatui terminal frontend, depends on ur-core
 ```
 
 ## Architecture
 
 `ur-core` is the single source of truth for all game rules. It contains board geometry, piece paths, legal move generation, move application, win detection, and the AI opponent. It has no dependencies on rendering, input, audio, or any platform API. It must compile to any Rust target including WebAssembly.
 
-`ur-desktop` is a thin frontend. It draws the board, handles mouse input, animates pieces, and calls `ur-core` for every game logic decision. It never computes whether a move is legal, never checks for captures, and never decides who wins. It asks `ur-core`.
+`ur-cli` is a thin terminal frontend built with ratatui and crossterm. It renders the board, handles keyboard input, runs animations (dice rolls, piece movement, captures), and calls `ur-core` for every game logic decision. It never computes whether a move is legal, never checks for captures, and never decides who wins. It asks `ur-core`.
 
 ## Ruleset
 
@@ -58,7 +58,7 @@ Key facts for quick reference:
 ### Dependencies
 
 - `ur-core` should have minimal dependencies. `rand` is acceptable for dice rolling. `serde` is acceptable behind a feature flag for serialization.
-- `ur-desktop` depends on `macroquad` for rendering.
+- `ur-cli` depends on `ratatui`, `crossterm`, and `rand` for terminal rendering, input, and dice rolling.
 - Do not add dependencies without justification.
 
 ## Build and Run
@@ -67,8 +67,8 @@ Key facts for quick reference:
 # Run tests
 cargo test --workspace
 
-# Run the desktop app
-cargo run -p ur-desktop
+# Run the terminal app
+cargo run -p ur-cli
 
 # Check formatting and lints
 cargo fmt --check
@@ -89,4 +89,4 @@ The search depth acts as a difficulty setting. Depth 2 is casual, depth 4 is com
 - Online multiplayer
 - Mobile frontends
 
-These are mentioned only to explain why `ur-core` is designed with strict separation from I/O. The current scope is `ur-core` and `ur-desktop` only.
+These are mentioned only to explain why `ur-core` is designed with strict separation from I/O. The current scope is `ur-core` and `ur-cli` only.
