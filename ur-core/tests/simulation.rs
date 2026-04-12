@@ -1,4 +1,4 @@
-use rand::{rngs::StdRng, SeedableRng};
+use rand::{rngs::StdRng, RngCore, SeedableRng};
 use ur_core::{
     dice::Dice,
     player::Player,
