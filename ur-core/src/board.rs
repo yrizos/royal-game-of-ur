@@ -2,6 +2,7 @@
 ///
 /// Valid squares follow the Finkel 3×8 layout with four removed squares:
 /// row 0 and row 2 have no columns 4 or 5.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Square {
     pub row: u8,
@@ -15,6 +16,7 @@ impl Square {
 }
 
 /// Defines which squares exist on the board and which are rosettes.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BoardShape {
     valid_squares: Vec<Square>,
@@ -72,6 +74,7 @@ impl BoardShape {
 ///
 /// Does not include the logical off-board entry or exit positions; those are
 /// handled by `PieceLocation` in the state module.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Path {
     squares: Vec<Square>,

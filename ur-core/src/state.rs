@@ -3,6 +3,7 @@ use crate::dice::Dice;
 use crate::player::{Piece, Player};
 
 /// Where a piece is relative to the board.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PieceLocation {
     /// Not yet entered; waiting in the player's pool.
@@ -14,7 +15,8 @@ pub enum PieceLocation {
 }
 
 /// A legal move: which piece moves, from where, to where.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Move {
     pub piece: Piece,
     pub from: PieceLocation,
@@ -22,7 +24,8 @@ pub struct Move {
 }
 
 /// Outcome of applying a move to a game state.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MoveResult {
     /// The new game state after the move.
     pub new_state: GameState,
@@ -37,6 +40,7 @@ pub struct MoveResult {
 }
 
 /// Which phase the game is currently in.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum GamePhase {
     /// The current player must roll the dice.
@@ -48,6 +52,7 @@ pub enum GamePhase {
 }
 
 /// Full ruleset configuration.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GameRules {
     pub board_shape: BoardShape,
@@ -116,6 +121,7 @@ impl GameRules {
 /// The board: tracks which piece occupies each square.
 ///
 /// Internally uses a flat 24-element array (3 rows × 8 cols, indexed `row * 8 + col`).
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Board {
     cells: [Option<Piece>; 24],
@@ -142,6 +148,7 @@ impl Default for Board {
 }
 
 /// The complete, immutable snapshot of a game at a point in time.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GameState {
     pub rules: GameRules,

@@ -3,6 +3,7 @@ use rand::Rng;
 /// The result of rolling four binary tetrahedral dice, producing a value 0–4.
 ///
 /// Each die contributes 1 if it lands marked-side up. The total is the sum.
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Dice(pub u8);
 
