@@ -8,12 +8,18 @@ pub enum Player {
 impl Player {
     /// Returns the opposing player.
     pub fn opponent(self) -> Player {
-        todo!()
+        match self {
+            Player::Player1 => Player::Player2,
+            Player::Player2 => Player::Player1,
+        }
     }
 
     /// Returns the zero-based index used for array lookup (Player1 = 0, Player2 = 1).
     pub fn index(self) -> usize {
-        todo!()
+        match self {
+            Player::Player1 => 0,
+            Player::Player2 => 1,
+        }
     }
 }
 
@@ -36,27 +42,27 @@ mod tests {
 
     #[test]
     fn test_player1_opponent_is_player2() {
-        todo!()
+        assert_eq!(Player::Player1.opponent(), Player::Player2);
     }
 
     #[test]
     fn test_player2_opponent_is_player1() {
-        todo!()
+        assert_eq!(Player::Player2.opponent(), Player::Player1);
     }
 
     #[test]
     fn test_opponent_is_involution() {
-        // p.opponent().opponent() == p for both players
-        todo!()
+        assert_eq!(Player::Player1.opponent().opponent(), Player::Player1);
+        assert_eq!(Player::Player2.opponent().opponent(), Player::Player2);
     }
 
     #[test]
     fn test_player_index_player1_is_0() {
-        todo!()
+        assert_eq!(Player::Player1.index(), 0);
     }
 
     #[test]
     fn test_player_index_player2_is_1() {
-        todo!()
+        assert_eq!(Player::Player2.index(), 1);
     }
 }
