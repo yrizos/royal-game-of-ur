@@ -156,8 +156,7 @@ The AI is part of the core library because it is pure computation over game stat
 - No I/O of any kind. No file access, no network, no stdout.
 - No platform-specific code. The crate must compile on any Rust target.
 - No global mutable state. All state is passed explicitly through function arguments.
-- The `rand` crate is the only expected external dependency (and it is optional, since the caller can provide dice rolls directly).
-- All game state types should be serializable with `serde` (behind a feature flag) to support save/load and network play in consumer applications.
+- The `rand` crate is the only external dependency.
 
 ## Testing Strategy
 

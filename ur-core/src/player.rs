@@ -1,5 +1,4 @@
 /// One of the two players.
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Player {
     Player1,
@@ -25,7 +24,6 @@ impl Player {
 }
 
 /// A single game piece, identified by its owner and a 0-based index (0–6).
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Piece {
     pub player: Player,
