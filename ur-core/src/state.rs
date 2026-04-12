@@ -63,16 +63,36 @@ impl GameRules {
     pub fn finkel() -> Self {
         let board_shape = BoardShape::finkel();
         let path_player1 = Path::new(vec![
-            Square::new(2, 3), Square::new(2, 2), Square::new(2, 1), Square::new(2, 0),
-            Square::new(1, 0), Square::new(1, 1), Square::new(1, 2), Square::new(1, 3),
-            Square::new(1, 4), Square::new(1, 5), Square::new(1, 6), Square::new(1, 7),
-            Square::new(2, 7), Square::new(2, 6),
+            Square::new(2, 3),
+            Square::new(2, 2),
+            Square::new(2, 1),
+            Square::new(2, 0),
+            Square::new(1, 0),
+            Square::new(1, 1),
+            Square::new(1, 2),
+            Square::new(1, 3),
+            Square::new(1, 4),
+            Square::new(1, 5),
+            Square::new(1, 6),
+            Square::new(1, 7),
+            Square::new(2, 7),
+            Square::new(2, 6),
         ]);
         let path_player2 = Path::new(vec![
-            Square::new(0, 3), Square::new(0, 2), Square::new(0, 1), Square::new(0, 0),
-            Square::new(1, 0), Square::new(1, 1), Square::new(1, 2), Square::new(1, 3),
-            Square::new(1, 4), Square::new(1, 5), Square::new(1, 6), Square::new(1, 7),
-            Square::new(0, 7), Square::new(0, 6),
+            Square::new(0, 3),
+            Square::new(0, 2),
+            Square::new(0, 1),
+            Square::new(0, 0),
+            Square::new(1, 0),
+            Square::new(1, 1),
+            Square::new(1, 2),
+            Square::new(1, 3),
+            Square::new(1, 4),
+            Square::new(1, 5),
+            Square::new(1, 6),
+            Square::new(1, 7),
+            Square::new(0, 7),
+            Square::new(0, 6),
         ]);
         Self {
             board_shape,
@@ -376,7 +396,13 @@ mod tests {
 
     /// Places `piece` at the given path index for the current player and returns
     /// a cloned state with that change applied. Does NOT adjust unplayed counts.
-    fn place_at_path_idx(state: &GameState, player: Player, piece_idx: u8, path_idx: usize) -> GameState {
+    #[allow(dead_code)]
+    fn place_at_path_idx(
+        state: &GameState,
+        player: Player,
+        piece_idx: u8,
+        path_idx: usize,
+    ) -> GameState {
         let sq = state.rules.path_for(player).get(path_idx).unwrap();
         let mut s = state.clone();
         s.board.set(sq, Some(Piece::new(player, piece_idx)));
@@ -411,8 +437,12 @@ mod tests {
         // With roll=1 and entry square (path[0] = (2,3)) empty, entering is legal
         assert!(!moves.is_empty());
         let entry_sq = rules.path_for(Player::Player1).get(0).unwrap();
-        assert!(moves.iter().any(|m| m.from == PieceLocation::Unplayed
-            && m.to == PieceLocation::OnBoard(entry_sq)));
+        assert!(
+            moves
+                .iter()
+                .any(|m| m.from == PieceLocation::Unplayed
+                    && m.to == PieceLocation::OnBoard(entry_sq))
+        );
     }
 
     #[test]
@@ -425,9 +455,13 @@ mod tests {
         s.board.set(entry_sq, Some(Piece::new(Player::Player1, 0)));
         // Now roll=1 would land there — must be blocked
         let moves = s.legal_moves(Dice(1));
-        assert!(moves.iter().all(|m| m.to != PieceLocation::OnBoard(entry_sq)
-            || m.from != PieceLocation::Unplayed),
-            "should not be able to enter when entry square is friendly-occupied");
+        assert!(
+            moves
+                .iter()
+                .all(|m| m.to != PieceLocation::OnBoard(entry_sq)
+                    || m.from != PieceLocation::Unplayed),
+            "should not be able to enter when entry square is friendly-occupied"
+        );
     }
 
     #[test]
@@ -440,7 +474,7 @@ mod tests {
         let mut s = state.clone();
         s.board.set(last_sq, Some(Piece::new(Player::Player1, 0)));
         s.unplayed[Player::Player1.index()] = 6; // 1 on board, 6 unplayed
-        // Roll=1 from index 13 → index 14 = path.len() → exact bear-off
+                                                 // Roll=1 from index 13 → index 14 = path.len() → exact bear-off
         let moves = s.legal_moves(Dice(1));
         assert!(moves.iter().any(|m| m.from == PieceLocation::OnBoard(last_sq)
             && m.to == PieceLocation::Scored),
@@ -457,8 +491,12 @@ mod tests {
         s.unplayed[Player::Player1.index()] = 6;
         // Roll=2 from index 13 → index 15 > 14 → overshoot, illegal
         let moves = s.legal_moves(Dice(2));
-        assert!(moves.iter().all(|m| m.from != PieceLocation::OnBoard(last_sq)),
-            "roll=2 from last square should not produce any move for that piece");
+        assert!(
+            moves
+                .iter()
+                .all(|m| m.from != PieceLocation::OnBoard(last_sq)),
+            "roll=2 from last square should not produce any move for that piece"
+        );
     }
 
     #[test]
@@ -475,9 +513,11 @@ mod tests {
         s.board.set(p2_sq, Some(Piece::new(Player::Player2, 0)));
         s.unplayed = [6, 6];
         let moves = s.legal_moves(Dice(1));
-        assert!(moves.iter().any(|m| m.from == PieceLocation::OnBoard(p1_sq)
-            && m.to == PieceLocation::OnBoard(p2_sq)),
-            "landing on opponent's non-rosette square should be legal");
+        assert!(
+            moves.iter().any(|m| m.from == PieceLocation::OnBoard(p1_sq)
+                && m.to == PieceLocation::OnBoard(p2_sq)),
+            "landing on opponent's non-rosette square should be legal"
+        );
     }
 
     #[test]
@@ -493,8 +533,12 @@ mod tests {
         s.board.set(rosette, Some(Piece::new(Player::Player2, 0)));
         s.unplayed = [6, 6];
         let moves = s.legal_moves(Dice(1));
-        assert!(moves.iter().all(|m| m.to != PieceLocation::OnBoard(rosette)),
-            "should not be able to capture opponent on rosette");
+        assert!(
+            moves
+                .iter()
+                .all(|m| m.to != PieceLocation::OnBoard(rosette)),
+            "should not be able to capture opponent on rosette"
+        );
     }
 
     #[test]
@@ -509,9 +553,13 @@ mod tests {
         s.unplayed[Player::Player1.index()] = 5;
         let moves = s.legal_moves(Dice(1));
         // piece 0 at sq0 cannot move to sq1 (friendly)
-        assert!(moves.iter().all(|m| !(m.from == PieceLocation::OnBoard(sq0)
-            && m.to == PieceLocation::OnBoard(sq1))),
-            "should not move to friendly-occupied square");
+        assert!(
+            moves
+                .iter()
+                .all(|m| !(m.from == PieceLocation::OnBoard(sq0)
+                    && m.to == PieceLocation::OnBoard(sq1))),
+            "should not move to friendly-occupied square"
+        );
     }
 
     #[test]
@@ -533,15 +581,20 @@ mod tests {
         let p1_rosette = Square::new(1, 3);
         assert!(rules.board_shape.is_rosette(p1_rosette));
         let p2_start = rules.path_for(Player::Player2).get(6).unwrap(); // (1,2)
-        // Reset board
+                                                                        // Reset board
         let mut s2 = GameState::new(&rules);
         s2.board.set(p2_start, Some(Piece::new(Player::Player2, 0)));
-        s2.board.set(p1_rosette, Some(Piece::new(Player::Player1, 0)));
+        s2.board
+            .set(p1_rosette, Some(Piece::new(Player::Player1, 0)));
         s2.unplayed = [6, 6];
         s2.current_player = Player::Player2;
         let moves = s2.legal_moves(Dice(1));
-        assert!(moves.iter().all(|m| m.to != PieceLocation::OnBoard(p1_rosette)),
-            "Player2 should not be able to capture Player1 on the shared rosette");
+        assert!(
+            moves
+                .iter()
+                .all(|m| m.to != PieceLocation::OnBoard(p1_rosette)),
+            "Player2 should not be able to capture Player1 on the shared rosette"
+        );
     }
 
     // ── Move application ─────────────────────────────────────────────────────
@@ -556,10 +609,17 @@ mod tests {
         s.board.set(start_sq, Some(Piece::new(Player::Player1, 0)));
         s.unplayed[Player::Player1.index()] = 6;
         let moves = s.legal_moves(Dice(3));
-        let mv = moves.iter().find(|m| m.from == PieceLocation::OnBoard(start_sq)).unwrap().clone();
+        let mv = moves
+            .iter()
+            .find(|m| m.from == PieceLocation::OnBoard(start_sq))
+            .unwrap()
+            .clone();
         assert_eq!(mv.to, PieceLocation::OnBoard(expected_sq));
         let result = s.apply_move(mv);
-        assert_eq!(result.new_state.board.get(expected_sq), Some(Piece::new(Player::Player1, 0)));
+        assert_eq!(
+            result.new_state.board.get(expected_sq),
+            Some(Piece::new(Player::Player1, 0))
+        );
         assert_eq!(result.new_state.board.get(start_sq), None);
     }
 
@@ -573,15 +633,21 @@ mod tests {
         s.board.set(p2_sq, Some(Piece::new(Player::Player2, 0)));
         s.unplayed = [6, 6];
         let moves = s.legal_moves(Dice(1));
-        let capture_mv = moves.iter()
-            .find(|m| m.from == PieceLocation::OnBoard(p1_sq)
-                && m.to == PieceLocation::OnBoard(p2_sq))
-            .unwrap().clone();
+        let capture_mv = moves
+            .iter()
+            .find(|m| {
+                m.from == PieceLocation::OnBoard(p1_sq) && m.to == PieceLocation::OnBoard(p2_sq)
+            })
+            .unwrap()
+            .clone();
         let result = s.apply_move(capture_mv);
         // Opponent's unplayed count increases by 1
         assert_eq!(result.new_state.unplayed[Player::Player2.index()], 7);
         // Capturing piece is now on the square
-        assert_eq!(result.new_state.board.get(p2_sq), Some(Piece::new(Player::Player1, 0)));
+        assert_eq!(
+            result.new_state.board.get(p2_sq),
+            Some(Piece::new(Player::Player1, 0))
+        );
         // Captured piece is gone from the board
         assert_eq!(result.new_state.board.get(p1_sq), None);
     }
@@ -597,8 +663,11 @@ mod tests {
         s.board.set(p2_sq, Some(p2_piece));
         s.unplayed = [6, 6];
         let moves = s.legal_moves(Dice(1));
-        let capture_mv = moves.iter()
-            .find(|m| m.to == PieceLocation::OnBoard(p2_sq)).unwrap().clone();
+        let capture_mv = moves
+            .iter()
+            .find(|m| m.to == PieceLocation::OnBoard(p2_sq))
+            .unwrap()
+            .clone();
         let result = s.apply_move(capture_mv);
         assert_eq!(result.captured, Some(p2_piece));
     }
@@ -614,7 +683,11 @@ mod tests {
         s.board.set(start_sq, Some(Piece::new(Player::Player1, 0)));
         s.unplayed[Player::Player1.index()] = 6;
         let moves = s.legal_moves(Dice(1));
-        let mv = moves.iter().find(|m| m.to == PieceLocation::OnBoard(rosette_sq)).unwrap().clone();
+        let mv = moves
+            .iter()
+            .find(|m| m.to == PieceLocation::OnBoard(rosette_sq))
+            .unwrap()
+            .clone();
         let result = s.apply_move(mv);
         // Same player still has the turn
         assert_eq!(result.new_state.current_player, Player::Player1);
@@ -629,7 +702,11 @@ mod tests {
         // P1 enters at path[0]=(2,3) with roll=1.
         s.unplayed[Player::Player1.index()] = 7;
         let moves = s.legal_moves(Dice(1));
-        let enter_mv = moves.iter().find(|m| m.from == PieceLocation::Unplayed).unwrap().clone();
+        let enter_mv = moves
+            .iter()
+            .find(|m| m.from == PieceLocation::Unplayed)
+            .unwrap()
+            .clone();
         let target = rules.path_for(Player::Player1).get(0).unwrap(); // (2,3) — not a rosette
         assert!(!rules.board_shape.is_rosette(target));
         assert_eq!(enter_mv.to, PieceLocation::OnBoard(target));
@@ -646,7 +723,11 @@ mod tests {
         s.board.set(last_sq, Some(Piece::new(Player::Player1, 0)));
         s.unplayed[Player::Player1.index()] = 6;
         let moves = s.legal_moves(Dice(1));
-        let bear_off = moves.iter().find(|m| m.to == PieceLocation::Scored).unwrap().clone();
+        let bear_off = moves
+            .iter()
+            .find(|m| m.to == PieceLocation::Scored)
+            .unwrap()
+            .clone();
         let result = s.apply_move(bear_off);
         assert!(result.piece_scored);
         assert_eq!(result.new_state.scored[Player::Player1.index()], 1);
@@ -662,7 +743,11 @@ mod tests {
         let last_sq = rules.path_for(Player::Player1).get(13).unwrap();
         s.board.set(last_sq, Some(Piece::new(Player::Player1, 0)));
         let moves = s.legal_moves(Dice(1));
-        let bear_off = moves.iter().find(|m| m.to == PieceLocation::Scored).unwrap().clone();
+        let bear_off = moves
+            .iter()
+            .find(|m| m.to == PieceLocation::Scored)
+            .unwrap()
+            .clone();
         let result = s.apply_move(bear_off);
         assert!(result.game_over);
         assert!(result.new_state.is_finished());
@@ -688,7 +773,7 @@ mod tests {
     #[test]
     fn test_forfeit_turn_when_no_legal_moves() {
         let rules = GameRules::finkel();
-        let mut s = GameState::new(&rules);
+        let s = GameState::new(&rules);
         // Roll 0 always produces no legal moves
         assert!(s.legal_moves(Dice(0)).is_empty());
         // pass_turn hands the turn to the opponent

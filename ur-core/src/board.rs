@@ -43,7 +43,10 @@ impl BoardShape {
             Square::new(2, 0),
             Square::new(2, 6),
         ];
-        Self { valid_squares, rosettes }
+        Self {
+            valid_squares,
+            rosettes,
+        }
     }
 
     /// Returns true if the given square exists on this board.
@@ -108,19 +111,39 @@ mod tests {
 
     fn player1_path() -> Path {
         Path::new(vec![
-            Square::new(2, 3), Square::new(2, 2), Square::new(2, 1), Square::new(2, 0),
-            Square::new(1, 0), Square::new(1, 1), Square::new(1, 2), Square::new(1, 3),
-            Square::new(1, 4), Square::new(1, 5), Square::new(1, 6), Square::new(1, 7),
-            Square::new(2, 7), Square::new(2, 6),
+            Square::new(2, 3),
+            Square::new(2, 2),
+            Square::new(2, 1),
+            Square::new(2, 0),
+            Square::new(1, 0),
+            Square::new(1, 1),
+            Square::new(1, 2),
+            Square::new(1, 3),
+            Square::new(1, 4),
+            Square::new(1, 5),
+            Square::new(1, 6),
+            Square::new(1, 7),
+            Square::new(2, 7),
+            Square::new(2, 6),
         ])
     }
 
     fn player2_path() -> Path {
         Path::new(vec![
-            Square::new(0, 3), Square::new(0, 2), Square::new(0, 1), Square::new(0, 0),
-            Square::new(1, 0), Square::new(1, 1), Square::new(1, 2), Square::new(1, 3),
-            Square::new(1, 4), Square::new(1, 5), Square::new(1, 6), Square::new(1, 7),
-            Square::new(0, 7), Square::new(0, 6),
+            Square::new(0, 3),
+            Square::new(0, 2),
+            Square::new(0, 1),
+            Square::new(0, 0),
+            Square::new(1, 0),
+            Square::new(1, 1),
+            Square::new(1, 2),
+            Square::new(1, 3),
+            Square::new(1, 4),
+            Square::new(1, 5),
+            Square::new(1, 6),
+            Square::new(1, 7),
+            Square::new(0, 7),
+            Square::new(0, 6),
         ])
     }
 
@@ -168,11 +191,13 @@ mod tests {
             let sq = Square::new(1, col);
             assert!(
                 p1.index_of(sq).is_some(),
-                "Player1 path missing shared square (1,{})", col
+                "Player1 path missing shared square (1,{})",
+                col
             );
             assert!(
                 p2.index_of(sq).is_some(),
-                "Player2 path missing shared square (1,{})", col
+                "Player2 path missing shared square (1,{})",
+                col
             );
         }
     }
@@ -188,7 +213,12 @@ mod tests {
             Square::new(2, 6),
         ];
         for sq in &expected_rosettes {
-            assert!(shape.is_rosette(*sq), "expected rosette at ({},{})", sq.row, sq.col);
+            assert!(
+                shape.is_rosette(*sq),
+                "expected rosette at ({},{})",
+                sq.row,
+                sq.col
+            );
         }
         // Verify no extra rosettes
         assert_eq!(shape.rosettes().len(), 5);
@@ -197,15 +227,27 @@ mod tests {
     #[test]
     fn test_invalid_squares_row0_cols_4_5() {
         let shape = BoardShape::finkel();
-        assert!(!shape.is_valid(Square::new(0, 4)), "(0,4) should be invalid");
-        assert!(!shape.is_valid(Square::new(0, 5)), "(0,5) should be invalid");
+        assert!(
+            !shape.is_valid(Square::new(0, 4)),
+            "(0,4) should be invalid"
+        );
+        assert!(
+            !shape.is_valid(Square::new(0, 5)),
+            "(0,5) should be invalid"
+        );
     }
 
     #[test]
     fn test_invalid_squares_row2_cols_4_5() {
         let shape = BoardShape::finkel();
-        assert!(!shape.is_valid(Square::new(2, 4)), "(2,4) should be invalid");
-        assert!(!shape.is_valid(Square::new(2, 5)), "(2,5) should be invalid");
+        assert!(
+            !shape.is_valid(Square::new(2, 4)),
+            "(2,4) should be invalid"
+        );
+        assert!(
+            !shape.is_valid(Square::new(2, 5)),
+            "(2,5) should be invalid"
+        );
     }
 
     #[test]

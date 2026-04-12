@@ -51,7 +51,11 @@ mod tests {
     #[test]
     fn test_dice_probabilities_sum_to_1() {
         let sum: f64 = DICE_PROBABILITIES.iter().sum();
-        assert!((sum - 1.0).abs() < 1e-10, "probabilities sum to {}, not 1.0", sum);
+        assert!(
+            (sum - 1.0).abs() < 1e-10,
+            "probabilities sum to {}, not 1.0",
+            sum
+        );
     }
 
     #[test]
@@ -69,7 +73,10 @@ mod tests {
             assert!(
                 diff < 0.02,
                 "roll {} observed {:.4} expected {:.4} diff {:.4} > 2%",
-                val, observed, expected, diff
+                val,
+                observed,
+                expected,
+                diff
             );
         }
     }
