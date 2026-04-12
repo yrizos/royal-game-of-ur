@@ -221,7 +221,78 @@ impl GameState {
     ///
     /// Panics if `mv` is not a structurally valid move (piece not present at `from`).
     pub fn apply_move(&self, mv: Move) -> MoveResult {
-        todo!()
+        let player = self.current_player;
+        let mut new_state = self.clone();
+        let mut captured: Option<Piece> = None;
+        let mut piece_scored = false;
+
+        // ── Remove piece from source ─────────────────────────────────────────────
+        match mv.from {
+            PieceLocation::Unplayed => {
+                assert!(
+                    new_state.unplayed[player.index()] > 0,
+                    "no unplayed pieces for {:?}",
+                    player
+                );
+                new_state.unplayed[player.index()] -= 1;
+            }
+            PieceLocation::OnBoard(sq) => {
+                assert_eq!(
+                    new_state.board.get(sq),
+                    Some(mv.piece),
+                    "piece {:?} not found at {:?}",
+                    mv.piece,
+                    sq
+                );
+                new_state.board.set(sq, None);
+            }
+            PieceLocation::Scored => panic!("scored pieces cannot move"),
+        }
+
+        // ── Place piece at destination ───────────────────────────────────────────
+        let landed_on_rosette = match mv.to {
+            PieceLocation::OnBoard(sq) => {
+                // Capture opponent piece if present
+                if let Some(occupant) = new_state.board.get(sq) {
+                    assert_eq!(
+                        occupant.player,
+                        player.opponent(),
+                        "cannot capture friendly piece"
+                    );
+                    captured = Some(occupant);
+                    new_state.unplayed[player.opponent().index()] += 1;
+                }
+                new_state.board.set(sq, Some(mv.piece));
+                new_state.rules.board_shape.is_rosette(sq)
+            }
+            PieceLocation::Scored => {
+                new_state.scored[player.index()] += 1;
+                piece_scored = true;
+                false
+            }
+            PieceLocation::Unplayed => panic!("pieces cannot move to unplayed"),
+        };
+
+        // ── Advance turn ─────────────────────────────────────────────────────────
+        let game_over = new_state.scored[player.index()] == new_state.rules.piece_count;
+
+        if game_over {
+            new_state.phase = GamePhase::GameOver(player);
+        } else if landed_on_rosette && new_state.rules.rosettes_grant_extra_turn {
+            // Same player rolls again — phase resets, current_player unchanged
+            new_state.phase = GamePhase::WaitingForRoll;
+        } else {
+            new_state.current_player = player.opponent();
+            new_state.phase = GamePhase::WaitingForRoll;
+        }
+
+        MoveResult {
+            new_state,
+            captured,
+            landed_on_rosette,
+            piece_scored,
+            game_over,
+        }
     }
 
     /// Passes the turn to the opponent without a move.
