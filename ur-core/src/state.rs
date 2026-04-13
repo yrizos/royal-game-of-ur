@@ -177,44 +177,50 @@ impl GameState {
         if roll.value() == 0 {
             return Vec::new();
         }
+        let roll = roll.value() as usize;
+        let mut moves = Vec::new();
+        self.collect_entry_move(roll, &mut moves);
+        self.collect_board_moves(roll, &mut moves);
+        moves
+    }
 
+    /// Appends a move entering a piece from the unplayed pool, if legal.
+    fn collect_entry_move(&self, roll: usize, moves: &mut Vec<Move>) {
+        let player = self.current_player;
+        if self.unplayed[player.index()] == 0 {
+            return;
+        }
+        // An unplayed piece is at logical position -1 (before path[0]).
+        // Moving `roll` squares lands it at path[roll - 1].
+        let path = self.rules.path_for(player);
+        let target_idx = roll - 1;
+        if target_idx < path.len() {
+            let target_sq = path.get(target_idx).unwrap();
+            if self.can_land_on(target_sq) {
+                moves.push(Move {
+                    piece: self.next_entering_piece(),
+                    from: PieceLocation::Unplayed,
+                    to: PieceLocation::OnBoard(target_sq),
+                });
+            }
+        }
+    }
+
+    /// Appends all legal moves for pieces already on the board.
+    fn collect_board_moves(&self, roll: usize, moves: &mut Vec<Move>) {
         let player = self.current_player;
         let path = self.rules.path_for(player);
         let path_len = path.len();
-        let roll = roll.value() as usize;
-        let mut moves = Vec::new();
-
-        // ── Try entering a piece from the unplayed pool ──────────────────────────
-        if self.unplayed[player.index()] > 0 {
-            // An unplayed piece is at logical position -1 (before path[0]).
-            // Moving `roll` squares lands it at path[roll - 1].
-            let target_idx = roll - 1;
-            if target_idx < path_len {
-                let target_sq = path.get(target_idx).unwrap();
-                if self.can_land_on(target_sq) {
-                    moves.push(Move {
-                        piece: self.next_entering_piece(),
-                        from: PieceLocation::Unplayed,
-                        to: PieceLocation::OnBoard(target_sq),
-                    });
-                }
-            }
-        }
-
-        // ── Try advancing each piece already on the board ────────────────────────
         for &sq in self.rules.board_shape.valid_squares() {
             let piece = match self.board.get(sq) {
                 Some(p) if p.player == player => p,
                 _ => continue,
             };
-
             let path_idx = match path.index_of(sq) {
                 Some(i) => i,
                 None => continue, // square not on this player's path
             };
-
             let new_path_idx = path_idx + roll;
-
             if new_path_idx == path_len {
                 // Exact bear-off
                 moves.push(Move {
@@ -234,8 +240,6 @@ impl GameState {
             }
             // else: overshoot — not a legal move, skip
         }
-
-        moves
     }
 
     /// Applies `mv` to this state and returns the result.
