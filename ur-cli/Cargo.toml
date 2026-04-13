@@ -1,0 +1,15 @@
+[package]
+name = "ur-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Terminal frontend for the Royal Game of Ur"
+
+[[bin]]
+name = "ur"
+path = "src/main.rs"
+
+[dependencies]
+ur-core = { path = "../ur-core" }
+ratatui = "0.26"
+crossterm = "0.27"
+rand = "0.8"
