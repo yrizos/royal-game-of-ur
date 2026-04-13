@@ -108,43 +108,14 @@ impl Path {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::GameRules;
 
     fn player1_path() -> Path {
-        Path::new(vec![
-            Square::new(2, 3),
-            Square::new(2, 2),
-            Square::new(2, 1),
-            Square::new(2, 0),
-            Square::new(1, 0),
-            Square::new(1, 1),
-            Square::new(1, 2),
-            Square::new(1, 3),
-            Square::new(1, 4),
-            Square::new(1, 5),
-            Square::new(1, 6),
-            Square::new(1, 7),
-            Square::new(2, 7),
-            Square::new(2, 6),
-        ])
+        GameRules::finkel().path_player1
     }
 
     fn player2_path() -> Path {
-        Path::new(vec![
-            Square::new(0, 3),
-            Square::new(0, 2),
-            Square::new(0, 1),
-            Square::new(0, 0),
-            Square::new(1, 0),
-            Square::new(1, 1),
-            Square::new(1, 2),
-            Square::new(1, 3),
-            Square::new(1, 4),
-            Square::new(1, 5),
-            Square::new(1, 6),
-            Square::new(1, 7),
-            Square::new(0, 7),
-            Square::new(0, 6),
-        ])
+        GameRules::finkel().path_player2
     }
 
     #[test]
