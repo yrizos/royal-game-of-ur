@@ -28,6 +28,9 @@ pub struct DiceOffState {
     pub acknowledged: bool,
 }
 
+/// Number of animation ticks for the dice-off countdown (≈1.5 s at 12 fps).
+const DICE_OFF_ANIMATION_FRAMES: u32 = 18;
+
 /// Difficulty level maps to expectiminimax search depth.
 pub const DIFFICULTIES: [(&str, u32); 3] = [("Easy", 2), ("Medium", 4), ("Hard", 6)];
 
@@ -80,7 +83,7 @@ impl App {
     pub fn confirm_difficulty(&mut self) {
         let selected = match self.screen {
             Screen::DifficultySelect { selected } => selected,
-            _ => 1,
+            _ => unreachable!("confirm_difficulty called from wrong screen"),
         };
         self.difficulty = DIFFICULTIES[selected].1;
 
@@ -88,8 +91,8 @@ impl App {
         let p2_final = Dice::roll(&mut self.rng);
         self.screen = Screen::DiceOff {
             state: DiceOffState {
-                p1_frames: 18,
-                p2_frames: 18,
+                p1_frames: DICE_OFF_ANIMATION_FRAMES,
+                p2_frames: DICE_OFF_ANIMATION_FRAMES,
                 p1_final,
                 p2_final,
                 p1_display: Dice(0),
@@ -168,6 +171,12 @@ impl App {
     pub fn on_animation_done(&mut self) { /* Task 11 */
     }
     pub fn poll_ai_move(&mut self) { /* Task 12 */
+    }
+}
+
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
