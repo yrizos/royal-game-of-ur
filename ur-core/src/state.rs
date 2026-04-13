@@ -123,10 +123,12 @@ pub struct Board {
 }
 
 impl Board {
+    /// Creates an empty board with all cells unoccupied.
     pub fn new() -> Self {
         Self { cells: [None; 24] }
     }
 
+    /// Returns the piece occupying `sq`, or `None` if the square is empty.
     pub fn get(&self, sq: Square) -> Option<Piece> {
         self.cells[sq.row as usize * 8 + sq.col as usize]
     }

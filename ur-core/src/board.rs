@@ -9,6 +9,7 @@ pub struct Square {
 }
 
 impl Square {
+    /// Creates a square at the given `row` and `col`.
     pub fn new(row: u8, col: u8) -> Self {
         Self { row, col }
     }
@@ -59,10 +60,12 @@ impl BoardShape {
         self.rosettes.contains(&sq)
     }
 
+    /// Returns all valid squares on this board.
     pub fn valid_squares(&self) -> &[Square] {
         &self.valid_squares
     }
 
+    /// Returns all rosette squares on this board.
     pub fn rosettes(&self) -> &[Square] {
         &self.rosettes
     }
@@ -78,18 +81,22 @@ pub struct Path {
 }
 
 impl Path {
+    /// Creates a path from an ordered list of squares.
     pub fn new(squares: Vec<Square>) -> Self {
         Self { squares }
     }
 
+    /// Returns all squares in this path in order.
     pub fn squares(&self) -> &[Square] {
         &self.squares
     }
 
+    /// Returns the number of squares in this path.
     pub fn len(&self) -> usize {
         self.squares.len()
     }
 
+    /// Returns true if this path contains no squares.
     pub fn is_empty(&self) -> bool {
         self.squares.is_empty()
     }

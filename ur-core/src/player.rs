@@ -31,6 +31,7 @@ pub struct Piece {
 }
 
 impl Piece {
+    /// Creates a piece owned by `player` with the given zero-based `index`.
     pub fn new(player: Player, index: u8) -> Self {
         Self { player, index }
     }
