@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use rand::{rngs::SmallRng, SeedableRng};
 use std::time::Instant;
 use ur_core::{
@@ -9,6 +7,7 @@ use ur_core::{
 
 /// Which screen is currently active.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub enum Screen {
     Title,
     DifficultySelect { selected: usize },
@@ -19,6 +18,7 @@ pub enum Screen {
 
 /// State for the first-player dice-off animation.
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct DiceOffState {
     pub p1_frames: u32,
     pub p2_frames: u32,
@@ -38,6 +38,7 @@ pub const DIFFICULTIES: [(&str, u32); 3] = [("Easy", 2), ("Medium", 4), ("Hard",
 
 /// Game statistics accumulated during play.
 #[derive(Debug, Default)]
+#[allow(dead_code)]
 pub struct GameStats {
     pub moves: u32,
     pub start_time: Option<Instant>,
@@ -45,6 +46,7 @@ pub struct GameStats {
 }
 
 /// Top-level application state.
+#[allow(dead_code)]
 pub struct App {
     pub screen: Screen,
     pub should_quit: bool,
@@ -79,7 +81,7 @@ impl App {
     }
 
     pub fn start_new_game(&mut self) {
-        self.screen = Screen::DifficultySelect { selected: 1 };
+        self.screen = Screen::DifficultySelect { selected: 0 };
     }
 
     pub fn confirm_difficulty(&mut self) {
@@ -162,16 +164,22 @@ impl App {
         }
     }
 
+    #[allow(dead_code)]
     pub fn handle_roll_dice(&mut self) { /* Task 11 */
     }
+    #[allow(dead_code)]
     pub fn handle_select_prev(&mut self) { /* Task 11 */
     }
+    #[allow(dead_code)]
     pub fn handle_select_next(&mut self) { /* Task 11 */
     }
+    #[allow(dead_code)]
     pub fn handle_confirm_move(&mut self) { /* Task 11 */
     }
+    #[allow(dead_code)]
     pub fn on_animation_done(&mut self) { /* Task 11 */
     }
+    #[allow(dead_code)]
     pub fn poll_ai_move(&mut self) { /* Task 12 */
     }
 }

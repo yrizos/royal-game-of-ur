@@ -21,8 +21,8 @@ const CUNEIFORM_SCRIPT: &str = "𒆳𒆳 𒀭𒂗𒍪 𒆳𒆳";
 pub fn render(f: &mut Frame, selected: usize) {
     let area = f.size();
 
-    // Centre vertically: border + gap + header + logo(6) + cuneiform + subtitle + gap + menu(2) + border = 15
-    let total_h = 15u16;
+    // Centre vertically: border + empty + header + logo(6) + cuneiform + subtitle + empty + menu(2) + empty + border = 16
+    let total_h = 16u16;
     let vpad = area.height.saturating_sub(total_h) / 2;
 
     let chunks = Layout::default()
