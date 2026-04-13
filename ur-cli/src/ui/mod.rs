@@ -1,10 +1,10 @@
-pub mod title;
-pub mod menu;
 pub mod game;
 pub mod gameover;
+pub mod menu;
+pub mod title;
 
-use ratatui::Frame;
 use crate::app::App;
+use ratatui::Frame;
 
 pub fn render(f: &mut Frame, app: &App) {
     // placeholder — will be implemented in Tasks 5-10

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use rand::{rngs::SmallRng, SeedableRng};
 use std::time::Instant;
 use ur_core::{

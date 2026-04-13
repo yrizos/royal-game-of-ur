@@ -1,5 +1,5 @@
-mod app;
 mod animation;
+mod app;
 mod input;
 mod ui;
 
@@ -17,6 +17,14 @@ use app::App;
 use input::{map_key, Action};
 
 fn main() -> io::Result<()> {
+    // Ensure terminal is restored if we panic.
+    let original_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+        original_hook(info);
+    }));
+
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
@@ -29,16 +37,17 @@ fn main() -> io::Result<()> {
 
     let result = run(&mut terminal, &mut app, tick_rate);
 
-    // Restore terminal
-    disable_raw_mode()?;
-    execute!(
+    // Restore terminal — run all steps regardless of individual failures.
+    let r1 = disable_raw_mode();
+    let r2 = execute!(
         terminal.backend_mut(),
         LeaveAlternateScreen,
         DisableMouseCapture,
-    )?;
-    terminal.show_cursor()?;
+    );
+    let r3 = terminal.show_cursor();
 
-    result
+    // Return the game result, or the first teardown error if any.
+    result.and(r1).and(r2).and(r3)
 }
 
 fn run<B: ratatui::backend::Backend>(
