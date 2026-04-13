@@ -37,12 +37,13 @@ pub struct MoveResult {
 }
 
 /// Which phase the game is currently in.
+///
+/// Dice are not stored in the phase. The caller rolls and passes the result
+/// into `GameState::legal_moves` directly.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum GamePhase {
     /// The current player must roll the dice.
     WaitingForRoll,
-    /// The current player must choose a move given this roll.
-    WaitingForMove(Dice),
     /// The game is over; this player won.
     GameOver(Player),
 }

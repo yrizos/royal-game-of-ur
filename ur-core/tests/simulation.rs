@@ -26,9 +26,6 @@ fn play_random_game(rng: &mut StdRng) -> Player {
                     state = result.new_state;
                 }
             }
-            GamePhase::WaitingForMove(_) => {
-                panic!("simulation entered unexpected WaitingForMove phase")
-            }
         }
     }
     panic!("game did not complete within 10_000 turns — possible infinite loop in game logic")
