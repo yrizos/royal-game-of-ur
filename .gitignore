@@ -27,3 +27,11 @@ Icon
 
 # Cargo.lock is committed because this workspace will contain a binary crate (ur-desktop)
 # when it is added. Library-only workspaces conventionally omit it.
+
+# Claude / Superpowers local config
+.claude/
+.superpowers/
+
+# Graphify knowledge graph output (regenerate with /graphify)
+graphify-out/
+ur-core/graphify-out/
