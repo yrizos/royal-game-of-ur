@@ -41,12 +41,15 @@ pub fn map_key(key: KeyEvent, screen: &Screen) -> Option<Action> {
         },
         Screen::DiceOff { .. } => match key.code {
             KeyCode::Enter | KeyCode::Char(' ') => Some(Action::Confirm),
+            KeyCode::Esc => Some(Action::QuitPrompt),
             _ => None,
         },
         Screen::Game => match key.code {
             KeyCode::Char(' ') => Some(Action::RollDice),
             KeyCode::Left | KeyCode::Char('h') => Some(Action::SelectPrev),
             KeyCode::Right => Some(Action::SelectNext),
+            // Note: `l` is ToggleLog per spec, not vi-style SelectNext.
+            // Use Right arrow for SelectNext instead.
             KeyCode::Char('l') => Some(Action::ToggleLog),
             KeyCode::Up | KeyCode::Char('k') => Some(Action::SelectPrev),
             KeyCode::Down | KeyCode::Char('j') => Some(Action::SelectNext),
@@ -55,7 +58,7 @@ pub fn map_key(key: KeyEvent, screen: &Screen) -> Option<Action> {
             _ => None,
         },
         Screen::GameOver => match key.code {
-            KeyCode::Char('n') | KeyCode::Char('N') => Some(Action::NewGame),
+            KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Enter => Some(Action::NewGame),
             KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => Some(Action::Quit),
             _ => None,
         },
