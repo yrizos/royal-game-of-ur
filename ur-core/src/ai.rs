@@ -95,6 +95,9 @@ fn evaluate(state: &GameState) -> f64 {
             if is_rosette {
                 score -= 0.5;
             }
+            if is_shared && !is_rosette {
+                score += 0.15; // opponent is exposed on the shared row and capturable
+            }
         }
     }
 
