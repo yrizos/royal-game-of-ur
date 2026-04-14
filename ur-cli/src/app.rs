@@ -119,6 +119,32 @@ impl App {
         };
     }
 
+    /// Starts the game with the given first player, initialising game state and
+    /// transitioning to the `Game` screen.
+    pub fn begin_game(&mut self, first_player: ur_core::player::Player) {
+        let rules = ur_core::state::GameRules::finkel();
+        let mut gs = ur_core::state::GameState::new(&rules);
+        gs.current_player = first_player;
+        self.game_state = Some(gs);
+        self.stats = GameStats {
+            start_time: Some(std::time::Instant::now()),
+            ..Default::default()
+        };
+        self.log.clear();
+        self.dice_roll = None;
+        self.legal_moves.clear();
+        self.selected_move_idx = 0;
+        self.animation = None;
+        self.ai_thinking = false;
+        self.ai_receiver = None;
+        self.ai_spinner_frame = 0;
+        self.screen = Screen::Game;
+
+        if first_player == ur_core::player::Player::Player2 {
+            self.start_ai_turn();
+        }
+    }
+
     pub fn quit(&mut self) {
         self.should_quit = true;
     }
@@ -133,7 +159,17 @@ impl App {
                 }
             }
             Screen::DifficultySelect { .. } => self.confirm_difficulty(),
-            Screen::DiceOff { .. } => { /* handled in animation::tick */ }
+            Screen::DiceOff { state } => {
+                if let Some(first_player) = state.winner {
+                    if !state.acknowledged {
+                        // mark as acknowledged to prevent double-trigger
+                        if let Screen::DiceOff { state } = &mut self.screen {
+                            state.acknowledged = true;
+                        }
+                        self.begin_game(first_player);
+                    }
+                }
+            }
             _ => {}
         }
     }

@@ -110,8 +110,19 @@ pub fn tick(app: &mut App) {
             state.winner = match state.p1_final.0.cmp(&state.p2_final.0) {
                 std::cmp::Ordering::Greater => Some(Player::Player1),
                 std::cmp::Ordering::Less => Some(Player::Player2),
-                std::cmp::Ordering::Equal => None, // tie — re-roll handled elsewhere
+                std::cmp::Ordering::Equal => None, // tie — schedule re-roll below
             };
+
+            // On a tie, reset and re-roll after the UI has had a chance to show "Tie"
+            if state.winner.is_none() {
+                const FRAMES: u32 = 18;
+                state.p1_frames = FRAMES;
+                state.p2_frames = FRAMES;
+                state.p1_final = ur_core::dice::Dice::roll(&mut app.rng);
+                state.p2_final = ur_core::dice::Dice::roll(&mut app.rng);
+                state.p1_display = Dice(0);
+                state.p2_display = Dice(0);
+            }
         }
     }
 
