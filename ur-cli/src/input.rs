@@ -16,6 +16,9 @@ pub enum Action {
     ConfirmMove,
     ToggleLog,
     QuitPrompt,
+    // Scrollable overlays
+    ScrollUp,
+    ScrollDown,
     // Game over
     NewGame,
     Quit,
@@ -64,10 +67,12 @@ pub fn map_key(key: KeyEvent, screen: &Screen) -> Option<Action> {
             KeyCode::Esc | KeyCode::Char('r') => Some(Action::Back),
             _ => None,
         },
-        Screen::Help => match key.code {
+        Screen::Help { .. } => match key.code {
             KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('q') => {
                 Some(Action::Back)
             }
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::ScrollUp),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::ScrollDown),
             _ => None,
         },
         Screen::GameOver => match key.code {

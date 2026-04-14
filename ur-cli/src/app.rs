@@ -24,7 +24,11 @@ pub enum Screen {
         selected: usize,
     },
     /// Rules + key-binding help screen.
-    Help,
+    /// `from_game`: true when reached via the pause menu; Back returns to PauseMenu.
+    /// false when reached from the title screen; Back returns to Title.
+    Help {
+        from_game: bool,
+    },
     GameOver,
 }
 
@@ -79,6 +83,8 @@ pub struct App {
     pub ai_thinking: bool,
     pub ai_spinner_frame: u32,
     pub ai_receiver: Option<std::sync::mpsc::Receiver<ur_core::state::Move>>,
+    /// Scroll offset for the help screen (lines scrolled down).
+    pub help_scroll: u16,
 }
 
 impl App {
@@ -100,6 +106,7 @@ impl App {
             ai_thinking: false,
             ai_spinner_frame: 0,
             ai_receiver: None,
+            help_scroll: 0,
         }
     }
 
@@ -167,13 +174,14 @@ impl App {
 
     pub fn handle_confirm(&mut self) {
         match &self.screen {
-            Screen::Title => {
-                if self.title_selected == 0 {
-                    self.start_new_game();
-                } else {
-                    self.quit();
+            Screen::Title => match self.title_selected {
+                0 => self.start_new_game(),
+                1 => {
+                    self.help_scroll = 0;
+                    self.screen = Screen::Help { from_game: false };
                 }
-            }
+                _ => self.quit(),
+            },
             Screen::DifficultySelect { .. } => self.confirm_difficulty(),
             Screen::DiceOff { state } => {
                 if let Some(first_player) = state.winner {
@@ -188,10 +196,19 @@ impl App {
             }
             Screen::PauseMenu { selected } => match *selected {
                 0 => self.screen = Screen::Game,
-                1 => self.screen = Screen::Help,
+                1 => {
+                    self.help_scroll = 0;
+                    self.screen = Screen::Help { from_game: true };
+                }
                 _ => self.quit(),
             },
-            Screen::Help => self.screen = Screen::PauseMenu { selected: 0 },
+            Screen::Help { from_game } => {
+                if *from_game {
+                    self.screen = Screen::PauseMenu { selected: 0 };
+                } else {
+                    self.screen = Screen::Title;
+                }
+            }
             _ => {}
         }
     }
@@ -200,9 +217,24 @@ impl App {
         match &self.screen {
             Screen::DifficultySelect { .. } => self.screen = Screen::Title,
             Screen::PauseMenu { .. } => self.screen = Screen::Game,
-            Screen::Help => self.screen = Screen::PauseMenu { selected: 0 },
+            Screen::Help { from_game } => {
+                if *from_game {
+                    self.screen = Screen::PauseMenu { selected: 0 };
+                } else {
+                    self.screen = Screen::Title;
+                }
+            }
             _ => {}
         }
+    }
+
+    /// Scroll the help screen up/down.
+    pub fn help_scroll_up(&mut self) {
+        self.help_scroll = self.help_scroll.saturating_sub(1);
+    }
+
+    pub fn help_scroll_down(&mut self) {
+        self.help_scroll = self.help_scroll.saturating_add(1);
     }
 
     pub fn handle_menu_up(&mut self) {
@@ -229,7 +261,7 @@ impl App {
     pub fn handle_menu_down(&mut self) {
         match &mut self.screen {
             Screen::Title => {
-                if self.title_selected < 1 {
+                if self.title_selected < 2 {
                     self.title_selected += 1;
                 }
             }

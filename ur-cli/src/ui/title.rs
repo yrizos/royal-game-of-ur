@@ -21,8 +21,8 @@ const CUNEIFORM_SCRIPT: &str = "𒆳𒆳 𒀭𒂗𒍪 𒆳𒆳";
 pub fn render(f: &mut Frame, selected: usize) {
     let area = f.size();
 
-    // Centre vertically: border + empty + header + logo(6) + cuneiform + subtitle + empty + menu(2) + empty + border = 16
-    let total_h = 16u16;
+    // Centre vertically: border + empty + header + logo(6) + cuneiform + subtitle + empty + menu(3) + empty + border = 17
+    let total_h = 17u16;
     let vpad = area.height.saturating_sub(total_h) / 2;
 
     let chunks = Layout::default()
@@ -58,7 +58,7 @@ pub fn render(f: &mut Frame, selected: usize) {
     );
     lines.push(Line::from(""));
 
-    let menu_items = ["New Game", "Quit"];
+    let menu_items = ["New Game", "How to Play", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         let style = if i == selected {
             Style::default().fg(Color::Black).bg(Color::Yellow)

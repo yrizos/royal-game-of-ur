@@ -18,10 +18,14 @@ pub fn render(f: &mut Frame, app: &App) {
             game::render_game(f, app);
             pause::render_pause_menu(f, *selected);
         }
-        crate::app::Screen::Help => {
-            // Render the game underneath, then overlay the help panel.
-            game::render_game(f, app);
-            pause::render_help(f);
+        crate::app::Screen::Help { from_game } => {
+            // Render the appropriate screen underneath, then overlay the help panel.
+            if *from_game {
+                game::render_game(f, app);
+            } else {
+                title::render(f, app.title_selected);
+            }
+            pause::render_help(f, app.help_scroll);
         }
         crate::app::Screen::GameOver => {
             use crate::ui::gameover::{render, GameOverData};

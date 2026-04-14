@@ -98,5 +98,7 @@ fn handle_action(app: &mut App, action: Action) {
         Action::ConfirmMove => app.handle_confirm_move(),
         Action::ToggleLog => app.log_visible = !app.log_visible,
         Action::QuitPrompt => app.open_pause(),
+        Action::ScrollUp => app.help_scroll_up(),
+        Action::ScrollDown => app.help_scroll_down(),
     }
 }
