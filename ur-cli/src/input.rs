@@ -57,6 +57,19 @@ pub fn map_key(key: KeyEvent, screen: &Screen) -> Option<Action> {
             KeyCode::Esc => Some(Action::QuitPrompt),
             _ => None,
         },
+        Screen::PauseMenu { .. } => match key.code {
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::MenuUp),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::MenuDown),
+            KeyCode::Enter | KeyCode::Char(' ') => Some(Action::Confirm),
+            KeyCode::Esc | KeyCode::Char('r') => Some(Action::Back),
+            _ => None,
+        },
+        Screen::Help => match key.code {
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('q') => {
+                Some(Action::Back)
+            }
+            _ => None,
+        },
         Screen::GameOver => match key.code {
             KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Enter => Some(Action::NewGame),
             KeyCode::Char('q') | KeyCode::Char('Q') | KeyCode::Esc => Some(Action::Quit),

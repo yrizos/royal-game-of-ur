@@ -68,8 +68,12 @@ impl<'a> Widget for BoardWidget<'a> {
         );
 
         for &sq in self.rules.board_shape.valid_squares() {
-            let cx = area.x + sq.col as u16 * 5;
-            let cy = area.y + sq.row as u16;
+            // Vertical board: board columns map to screen rows (top = col 0),
+            // board rows map to screen columns with P1 (row 2) on the left and
+            // P2 (row 0) on the right.
+            let screen_col = 2u16.saturating_sub(sq.row as u16);
+            let cx = area.x + screen_col * 5;
+            let cy = area.y + sq.col as u16;
 
             // Skip squares that fall outside the render area.
             if cx + 3 >= area.x + area.width || cy >= area.y + area.height {
@@ -99,17 +103,18 @@ impl<'a> Widget for BoardWidget<'a> {
             // ── PieceMove ghost overlay ──────────────────────────────────────
             if piece_move_ghost == Some(sq) {
                 let ghost_color = if ghost_is_player1 { COLOR_P1 } else { COLOR_P2 };
+                let ghost_bg = if is_rosette {
+                    COLOR_ROSETTE_BG
+                } else {
+                    Color::Rgb(18, 15, 12)
+                };
                 let ghost_style = Style::default()
                     .fg(ghost_color)
-                    .bg(if is_rosette {
-                        COLOR_ROSETTE_BG
-                    } else {
-                        Color::Reset
-                    })
+                    .bg(ghost_bg)
                     .add_modifier(Modifier::DIM);
                 buf.get_mut(cx, cy)
                     .set_char('\u{2502}')
-                    .set_style(Style::default().fg(Color::DarkGray).bg(Color::Reset));
+                    .set_style(Style::default().fg(Color::DarkGray).bg(ghost_bg));
                 for (i, ch) in " \u{25CF} ".chars().enumerate() {
                     buf.get_mut(cx + 1 + i as u16, cy)
                         .set_char(ch)
@@ -119,6 +124,7 @@ impl<'a> Widget for BoardWidget<'a> {
             }
 
             // Determine background color.
+            const COLOR_EMPTY_BG: Color = Color::Rgb(18, 15, 12);
             let bg = if is_selected {
                 COLOR_SELECT_BG
             } else if is_rosette {
@@ -126,7 +132,7 @@ impl<'a> Widget for BoardWidget<'a> {
             } else if is_target {
                 Color::Rgb(20, 40, 20)
             } else {
-                Color::Reset
+                COLOR_EMPTY_BG
             };
 
             // Determine content string and foreground color.
@@ -159,6 +165,34 @@ impl<'a> Widget for BoardWidget<'a> {
                 buf.get_mut(cx + 1 + i as u16, cy)
                     .set_char(ch)
                     .set_style(Style::default().fg(fg).bg(bg));
+            }
+        }
+
+        // ── Closing right borders ────────────────────────────────────────────
+        // For rows 0-3 and 6-7 all three screen columns are present → border at col 2 + 4.
+        // For rows 4-5 only the shared (middle) column is present → border at col 1 + 4.
+        let border_style = Style::default().fg(Color::DarkGray).bg(Color::Reset);
+        for board_col in 0u8..8 {
+            let cy = area.y + board_col as u16;
+            if cy >= area.y + area.height {
+                continue;
+            }
+            if board_col == 4 || board_col == 5 {
+                // Only shared column — close it at screen col 1 right edge.
+                let rx = area.x + 9;
+                if rx < area.x + area.width {
+                    buf.get_mut(rx, cy)
+                        .set_char('\u{2502}')
+                        .set_style(border_style);
+                }
+            } else {
+                // All three columns — close at screen col 2 right edge.
+                let rx = area.x + 2 * 5 + 4;
+                if rx < area.x + area.width {
+                    buf.get_mut(rx, cy)
+                        .set_char('\u{2502}')
+                        .set_style(border_style);
+                }
             }
         }
     }
@@ -306,7 +340,7 @@ pub fn render_status_bar(
         "{} Moves: {}  Time: {}  {}  {}",
         dice_str, moves, time_str, ai_str, log_entry
     );
-    let right = format!("  {}", log_hint);
+    let right = format!("  Spc=Roll  ↑↓=Select  Enter=Move  Esc=Pause  {}", log_hint);
 
     let line = Line::from(vec![
         Span::styled(left, Style::default().fg(Color::Gray)),
@@ -331,8 +365,9 @@ pub fn render_game(f: &mut Frame, app: &App) {
     let main = rows[0];
     let status_area = rows[1];
 
-    // Board: 8 cols × 5 chars + 1 border = 41 wide. Panels split the remainder.
-    let board_w = 41u16;
+    // Board: 3 rows × 5 chars + 1 closing border = 16 wide, 8 rows tall.
+    // P1 (row 2) on left, shared (row 1) in middle, P2 (row 0) on right.
+    let board_w = 16u16;
     let panel_w = main.width.saturating_sub(board_w) / 2;
 
     let cols = Layout::default()
@@ -375,12 +410,34 @@ pub fn render_game(f: &mut Frame, app: &App) {
         app.stats.captures[0],
     );
 
-    // Render board (center), offset 1 row for visual breathing room
+    // Render board (center), with 1-row column headers and 1-row bottom margin.
+    // Column headers: P1 (left) · shared (mid) · P2 (right).
+    let header_y = cols[1].y + 1;
+    if header_y < cols[1].y + cols[1].height {
+        use ratatui::buffer::Buffer as Buf;
+        let buf: &mut Buf = f.buffer_mut();
+        let bx = cols[1].x;
+        let headers: [(&str, Color); 3] = [
+            ("YOU ", COLOR_P1),
+            (" \u{25c6}  ", Color::DarkGray), // ◆
+            (" AI ", COLOR_P2),
+        ];
+        for (i, (label, fg)) in headers.iter().enumerate() {
+            let cx = bx + i as u16 * 5;
+            for (j, ch) in label.chars().enumerate() {
+                if cx + j as u16 + 1 < bx + cols[1].width {
+                    buf.get_mut(cx + j as u16, header_y)
+                        .set_char(ch)
+                        .set_style(Style::default().fg(*fg).add_modifier(Modifier::BOLD));
+                }
+            }
+        }
+    }
     let board_area = Rect::new(
         cols[1].x,
-        cols[1].y + 1,
+        cols[1].y + 2,
         cols[1].width,
-        cols[1].height.saturating_sub(2),
+        cols[1].height.saturating_sub(3),
     );
     BoardWidget {
         rules,

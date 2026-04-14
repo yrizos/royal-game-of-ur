@@ -97,6 +97,6 @@ fn handle_action(app: &mut App, action: Action) {
         Action::SelectNext => app.handle_select_next(),
         Action::ConfirmMove => app.handle_confirm_move(),
         Action::ToggleLog => app.log_visible = !app.log_visible,
-        Action::QuitPrompt => app.quit(), // simplified: quit immediately for now
+        Action::QuitPrompt => app.open_pause(),
     }
 }

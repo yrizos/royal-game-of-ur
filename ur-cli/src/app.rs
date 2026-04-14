@@ -11,9 +11,20 @@ use ur_core::{
 #[allow(dead_code)]
 pub enum Screen {
     Title,
-    DifficultySelect { selected: usize },
-    DiceOff { state: DiceOffState },
+    DifficultySelect {
+        selected: usize,
+    },
+    DiceOff {
+        state: DiceOffState,
+    },
     Game,
+    /// Pause overlay shown when pressing Esc during gameplay.
+    /// `selected`: 0 = Resume, 1 = How to Play, 2 = Quit
+    PauseMenu {
+        selected: usize,
+    },
+    /// Rules + key-binding help screen.
+    Help,
     GameOver,
 }
 
@@ -149,6 +160,11 @@ impl App {
         self.should_quit = true;
     }
 
+    /// Opens the pause menu (called when Esc is pressed during gameplay).
+    pub fn open_pause(&mut self) {
+        self.screen = Screen::PauseMenu { selected: 0 };
+    }
+
     pub fn handle_confirm(&mut self) {
         match &self.screen {
             Screen::Title => {
@@ -170,13 +186,22 @@ impl App {
                     }
                 }
             }
+            Screen::PauseMenu { selected } => match *selected {
+                0 => self.screen = Screen::Game,
+                1 => self.screen = Screen::Help,
+                _ => self.quit(),
+            },
+            Screen::Help => self.screen = Screen::PauseMenu { selected: 0 },
             _ => {}
         }
     }
 
     pub fn handle_back(&mut self) {
-        if let Screen::DifficultySelect { .. } = &self.screen {
-            self.screen = Screen::Title;
+        match &self.screen {
+            Screen::DifficultySelect { .. } => self.screen = Screen::Title,
+            Screen::PauseMenu { .. } => self.screen = Screen::Game,
+            Screen::Help => self.screen = Screen::PauseMenu { selected: 0 },
+            _ => {}
         }
     }
 
@@ -188,6 +213,11 @@ impl App {
                 }
             }
             Screen::DifficultySelect { selected } => {
+                if *selected > 0 {
+                    *selected -= 1;
+                }
+            }
+            Screen::PauseMenu { selected } => {
                 if *selected > 0 {
                     *selected -= 1;
                 }
@@ -204,6 +234,11 @@ impl App {
                 }
             }
             Screen::DifficultySelect { selected } => {
+                if *selected < 2 {
+                    *selected += 1;
+                }
+            }
+            Screen::PauseMenu { selected } => {
                 if *selected < 2 {
                     *selected += 1;
                 }

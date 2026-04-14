@@ -2,6 +2,10 @@
 default:
     @just --list
 
+# Run the terminal app
+run:
+    cargo run -p ur-cli
+
 # Run all tests
 test:
     cargo test --workspace
