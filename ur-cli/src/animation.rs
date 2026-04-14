@@ -57,9 +57,8 @@ pub fn tick_animation(anim: &mut Animation) {
             } else {
                 remaining.remove(0);
                 *frames_this_step = *frames_per_step;
-                if remaining.is_empty() {
-                    *anim = Animation::Done;
-                }
+                // The outer `else if remaining.is_empty()` branch handles Done
+                // after frames_this_step counts down, ensuring the final square is rendered.
             }
         }
         Animation::CaptureFlash {
