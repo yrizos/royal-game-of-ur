@@ -318,6 +318,37 @@ impl App {
             return;
         }
 
+        // Start cosmetic capture-flash animation when a capture occurred.
+        if result.captured.is_some() {
+            if let ur_core::state::PieceLocation::OnBoard(sq) = mv.to {
+                self.animation = Some(Animation::CaptureFlash {
+                    square: sq,
+                    frames_remaining: 9,
+                });
+                // After the animation completes, on_animation_done will be called.
+                // dice_roll is already None at this point, so it will be a no-op there.
+                // We must still start the AI turn after the flash. We store the intent
+                // to start the AI turn via the pending_ai_turn flag handled in
+                // on_animation_done. For simplicity we start the AI turn immediately
+                // even while the flash plays — the flash is purely visual.
+            }
+        }
+
+        // Start cosmetic piece-move animation, showing a ghost stepping along the path.
+        // Only start if no capture flash is already set (capture flash takes priority).
+        if self.animation.is_none() {
+            let path_squares = compute_move_path(&gs.rules, &mv);
+            if path_squares.len() > 1 {
+                let is_player1 = mv.piece.player == ur_core::player::Player::Player1;
+                self.animation = Some(Animation::PieceMove {
+                    remaining: path_squares,
+                    frames_per_step: 3,
+                    frames_this_step: 3,
+                    is_player1,
+                });
+            }
+        }
+
         if result.new_state.current_player == ur_core::player::Player::Player2 {
             self.start_ai_turn();
         }
@@ -421,6 +452,44 @@ impl Default for App {
     fn default() -> Self {
         Self::new()
     }
+}
+
+/// Computes the sequence of board squares a piece travels through when making `mv`.
+///
+/// Returns the intermediate squares (not including the source) up to and including
+/// the destination. Returns an empty `Vec` if the move is not an on-board-to-on-board
+/// or unplayed-to-on-board move (e.g. bear-off moves return empty).
+///
+/// Used to populate `Animation::PieceMove::remaining`.
+fn compute_move_path(
+    rules: &ur_core::state::GameRules,
+    mv: &ur_core::state::Move,
+) -> Vec<ur_core::board::Square> {
+    let to_sq = match mv.to {
+        ur_core::state::PieceLocation::OnBoard(sq) => sq,
+        _ => return Vec::new(), // bear-off or other — no path to show
+    };
+
+    let path = rules.path_for(mv.piece.player);
+
+    let dest_idx = match path.index_of(to_sq) {
+        Some(i) => i,
+        None => return Vec::new(),
+    };
+
+    let start_idx = match mv.from {
+        ur_core::state::PieceLocation::OnBoard(from_sq) => {
+            match path.index_of(from_sq) {
+                Some(i) => i + 1, // start from the square after the current position
+                None => return Vec::new(),
+            }
+        }
+        ur_core::state::PieceLocation::Unplayed => 0, // entering piece: show from path[0]
+        ur_core::state::PieceLocation::Scored => return Vec::new(),
+    };
+
+    // Collect all intermediate squares including destination
+    (start_idx..=dest_idx).filter_map(|i| path.get(i)).collect()
 }
 
 #[cfg(test)]

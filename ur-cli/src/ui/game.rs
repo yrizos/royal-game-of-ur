@@ -30,10 +30,43 @@ pub struct BoardWidget<'a> {
     pub board: &'a Board,
     pub selected_square: Option<Square>,
     pub target_squares: &'a [Square],
+    /// Optional animation state to overlay on the board.
+    pub animation: Option<&'a crate::animation::Animation>,
 }
 
 impl<'a> Widget for BoardWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        // Determine animation state once for reuse in per-square rendering.
+        let capture_flash_sq: Option<Square> = match self.animation {
+            Some(crate::animation::Animation::CaptureFlash {
+                square,
+                frames_remaining,
+            }) if *frames_remaining % 2 == 1 => Some(*square),
+            _ => None,
+        };
+
+        let piece_move_ghost: Option<Square> = match self.animation {
+            Some(crate::animation::Animation::PieceMove {
+                remaining,
+                is_player1,
+                ..
+            }) => remaining.first().map(|&sq| {
+                // Tag with player via a side-channel: store player in a local for use
+                // in the per-square branch below. We use a separate extraction.
+                let _ = is_player1; // used below via ghost_is_player1
+                sq
+            }),
+            _ => None,
+        };
+
+        let ghost_is_player1: bool = matches!(
+            self.animation,
+            Some(crate::animation::Animation::PieceMove {
+                is_player1: true,
+                ..
+            })
+        );
+
         for &sq in self.rules.board_shape.valid_squares() {
             let cx = area.x + sq.col as u16 * 5;
             let cy = area.y + sq.row as u16;
@@ -47,6 +80,43 @@ impl<'a> Widget for BoardWidget<'a> {
             let is_target = self.target_squares.contains(&sq);
             let is_rosette = self.rules.board_shape.is_rosette(sq);
             let occupant = self.board.get(sq);
+
+            // ── CaptureFlash overlay ─────────────────────────────────────────
+            if capture_flash_sq == Some(sq) {
+                // Flash the captured piece in red on odd frames.
+                let style = Style::default().fg(Color::LightRed).bg(Color::Reset);
+                buf.get_mut(cx, cy)
+                    .set_char('\u{2502}')
+                    .set_style(Style::default().fg(Color::DarkGray).bg(Color::Reset));
+                for (i, ch) in " \u{25CF} ".chars().enumerate() {
+                    buf.get_mut(cx + 1 + i as u16, cy)
+                        .set_char(ch)
+                        .set_style(style);
+                }
+                continue;
+            }
+
+            // ── PieceMove ghost overlay ──────────────────────────────────────
+            if piece_move_ghost == Some(sq) {
+                let ghost_color = if ghost_is_player1 { COLOR_P1 } else { COLOR_P2 };
+                let ghost_style = Style::default()
+                    .fg(ghost_color)
+                    .bg(if is_rosette {
+                        COLOR_ROSETTE_BG
+                    } else {
+                        Color::Reset
+                    })
+                    .add_modifier(Modifier::DIM);
+                buf.get_mut(cx, cy)
+                    .set_char('\u{2502}')
+                    .set_style(Style::default().fg(Color::DarkGray).bg(Color::Reset));
+                for (i, ch) in " \u{25CF} ".chars().enumerate() {
+                    buf.get_mut(cx + 1 + i as u16, cy)
+                        .set_char(ch)
+                        .set_style(ghost_style);
+                }
+                continue;
+            }
 
             // Determine background color.
             let bg = if is_selected {
@@ -317,6 +387,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         board: &game_state.board,
         selected_square: selected_sq,
         target_squares: &target_sqs,
+        animation: app.animation.as_ref(),
     }
     .render(board_area, f.buffer_mut());
 
