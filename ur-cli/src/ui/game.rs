@@ -284,7 +284,13 @@ pub fn render_game(f: &mut Frame, app: &App) {
     // Collect selected source/target squares
     let selected_move = app.legal_moves.get(app.selected_move_idx);
     let selected_sq = selected_move.and_then(move_source);
-    let target_sqs: Vec<_> = app.legal_moves.iter().filter_map(move_target).collect();
+    // Show only move destinations for the currently selected piece (same source square).
+    let target_sqs: Vec<_> = app
+        .legal_moves
+        .iter()
+        .filter(|m| move_source(m) == selected_sq)
+        .filter_map(move_target)
+        .collect();
 
     // Render player 1 panel (left)
     render_player_panel(
