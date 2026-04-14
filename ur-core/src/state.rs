@@ -332,6 +332,17 @@ impl GameState {
         new_state
     }
 
+    /// Advances to the next player's turn without applying a move.
+    ///
+    /// Used when `legal_moves` returns empty (roll of 0 or no valid squares).
+    /// Returns `None` if the game is already over.
+    pub fn forfeit_turn(&self) -> Option<Self> {
+        match &self.phase {
+            GamePhase::GameOver(_) => None,
+            _ => Some(self.pass_turn()),
+        }
+    }
+
     /// Returns true if the game is over.
     pub fn is_finished(&self) -> bool {
         matches!(self.phase, GamePhase::GameOver(_))
@@ -776,6 +787,23 @@ mod tests {
     }
 
     // ── Turn forfeiture ──────────────────────────────────────────────────────
+
+    #[test]
+    fn test_forfeit_turn_advances_to_opponent() {
+        let rules = GameRules::finkel();
+        let state = GameState::new(&rules);
+        assert_eq!(state.current_player, Player::Player1);
+        let next = state.forfeit_turn().unwrap();
+        assert_eq!(next.current_player, Player::Player2);
+    }
+
+    #[test]
+    fn test_forfeit_turn_returns_none_when_game_over() {
+        let rules = GameRules::finkel();
+        let mut state = GameState::new(&rules);
+        state.phase = GamePhase::GameOver(Player::Player1);
+        assert!(state.forfeit_turn().is_none());
+    }
 
     #[test]
     fn test_forfeit_turn_when_no_legal_moves() {

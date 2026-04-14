@@ -173,21 +173,149 @@ impl App {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn handle_roll_dice(&mut self) { /* Task 11 */
+    /// Handles the player pressing the roll-dice key.
+    ///
+    /// Only allowed during Player1's turn, in `WaitingForRoll` phase, when no
+    /// animation is currently running.
+    pub fn handle_roll_dice(&mut self) {
+        let gs = match &self.game_state {
+            Some(gs) => gs,
+            None => return,
+        };
+        if gs.current_player != ur_core::player::Player::Player1 {
+            return;
+        }
+        if !matches!(gs.phase, ur_core::state::GamePhase::WaitingForRoll) {
+            return;
+        }
+        if self.animation.is_some() {
+            return;
+        }
+
+        let final_value = Dice::roll(&mut self.rng);
+        self.animation = Some(Animation::DiceRoll {
+            frames_remaining: 18,
+            final_value,
+            display: Dice(0),
+        });
+        self.dice_roll = Some(final_value);
     }
-    #[allow(dead_code)]
-    pub fn handle_select_prev(&mut self) { /* Task 11 */
+
+    /// Cycles the move selection to the previous legal move.
+    pub fn handle_select_prev(&mut self) {
+        if self.legal_moves.is_empty() {
+            return;
+        }
+        if self.selected_move_idx == 0 {
+            self.selected_move_idx = self.legal_moves.len() - 1;
+        } else {
+            self.selected_move_idx -= 1;
+        }
     }
-    #[allow(dead_code)]
-    pub fn handle_select_next(&mut self) { /* Task 11 */
+
+    /// Cycles the move selection to the next legal move.
+    pub fn handle_select_next(&mut self) {
+        if self.legal_moves.is_empty() {
+            return;
+        }
+        self.selected_move_idx = (self.selected_move_idx + 1) % self.legal_moves.len();
     }
-    #[allow(dead_code)]
-    pub fn handle_confirm_move(&mut self) { /* Task 11 */
+
+    /// Confirms the currently selected move and applies it.
+    pub fn handle_confirm_move(&mut self) {
+        if self.animation.is_some() {
+            return;
+        }
+        let mv = match self.legal_moves.get(self.selected_move_idx) {
+            Some(m) => m.clone(),
+            None => return,
+        };
+        self.apply_move(mv);
     }
-    #[allow(dead_code)]
-    pub fn on_animation_done(&mut self) { /* Task 11 */
+
+    /// Applies a move to the current game state and handles turn transitions.
+    pub fn apply_move(&mut self, mv: Move) {
+        let gs = match self.game_state.take() {
+            Some(gs) => gs,
+            None => return,
+        };
+        let result = gs.apply_move(mv.clone());
+        self.stats.moves += 1;
+
+        let player_num = match mv.piece.player {
+            ur_core::player::Player::Player1 => 1,
+            ur_core::player::Player::Player2 => 2,
+        };
+        let piece_desc = format!("P{player_num}");
+        match &mv.to {
+            ur_core::state::PieceLocation::OnBoard(sq) => {
+                if result.captured.is_some() {
+                    self.stats.captures[player_num - 1] += 1;
+                    self.log
+                        .push(format!("{piece_desc} captured on ({},{})", sq.row, sq.col));
+                } else if result.landed_on_rosette {
+                    self.log.push(format!(
+                        "{piece_desc} landed on rosette ({},{}) — extra turn!",
+                        sq.row, sq.col
+                    ));
+                } else {
+                    self.log
+                        .push(format!("{piece_desc} moved to ({},{})", sq.row, sq.col));
+                }
+            }
+            ur_core::state::PieceLocation::Scored => {
+                self.log.push(format!("{piece_desc} scored a piece!"));
+            }
+            _ => {}
+        }
+
+        self.game_state = Some(result.new_state.clone());
+        self.dice_roll = None;
+        self.legal_moves.clear();
+        self.selected_move_idx = 0;
+
+        if result.game_over {
+            self.screen = Screen::GameOver;
+            return;
+        }
+
+        if result.new_state.current_player == ur_core::player::Player::Player2 {
+            self.start_ai_turn();
+        }
     }
+
+    /// Called when the active animation completes.
+    ///
+    /// Computes legal moves from the rolled dice; forfeits the turn if none exist.
+    pub fn on_animation_done(&mut self) {
+        if let Some(roll) = self.dice_roll {
+            if let Some(gs) = &self.game_state {
+                let moves = gs.legal_moves(roll);
+                if moves.is_empty() {
+                    self.log
+                        .push(format!("Roll {} — no moves, turn forfeited", roll.value()));
+                    if let Some(new_gs) = gs.clone().forfeit_turn() {
+                        let next_player = new_gs.current_player;
+                        self.game_state = Some(new_gs);
+                        if next_player == ur_core::player::Player::Player2 {
+                            self.start_ai_turn();
+                        }
+                    }
+                    self.dice_roll = None;
+                } else {
+                    self.legal_moves = moves;
+                    self.selected_move_idx = 0;
+                }
+            }
+        }
+    }
+
+    /// Stub for starting the AI turn (implemented in Task 12).
+    #[allow(dead_code)]
+    pub fn start_ai_turn(&mut self) {
+        // Implemented in Task 12
+    }
+
     #[allow(dead_code)]
     pub fn poll_ai_move(&mut self) { /* Task 12 */
     }
@@ -229,5 +357,38 @@ mod tests {
         let mut app = App::new();
         app.quit();
         assert!(app.should_quit);
+    }
+
+    #[test]
+    fn test_roll_dice_starts_dice_animation() {
+        let mut app = App::new();
+        app.game_state = Some(ur_core::state::GameState::new(
+            &ur_core::state::GameRules::finkel(),
+        ));
+        app.handle_roll_dice();
+        assert!(matches!(
+            app.animation,
+            Some(crate::animation::Animation::DiceRoll { .. })
+        ));
+    }
+
+    #[test]
+    fn test_select_next_wraps_within_legal_moves() {
+        let mut app = App::new();
+        app.legal_moves = vec![
+            ur_core::state::Move {
+                piece: ur_core::player::Piece::new(ur_core::player::Player::Player1, 0),
+                from: ur_core::state::PieceLocation::Unplayed,
+                to: ur_core::state::PieceLocation::OnBoard(ur_core::board::Square::new(2, 3)),
+            },
+            ur_core::state::Move {
+                piece: ur_core::player::Piece::new(ur_core::player::Player::Player1, 1),
+                from: ur_core::state::PieceLocation::Unplayed,
+                to: ur_core::state::PieceLocation::OnBoard(ur_core::board::Square::new(2, 3)),
+            },
+        ];
+        app.selected_move_idx = 1;
+        app.handle_select_next();
+        assert_eq!(app.selected_move_idx, 0); // wraps to 0
     }
 }
