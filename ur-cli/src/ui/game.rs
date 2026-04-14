@@ -21,6 +21,7 @@ pub const COLOR_SELECT_BG: Color = Color::Yellow;
 // ── Widget ───────────────────────────────────────────────────────────────────
 
 /// Renders the Royal Game of Ur board into a ratatui buffer.
+// Wired in Task 10 (gameplay screen layout).
 #[allow(dead_code)]
 pub struct BoardWidget<'a> {
     pub rules: &'a GameRules,
@@ -82,10 +83,9 @@ impl<'a> Widget for BoardWidget<'a> {
                 .set_style(Style::default().fg(Color::DarkGray).bg(bg));
 
             // Draw the 3-char content cells.
-            let content_chars: Vec<char> = content.chars().collect();
-            for (i, ch) in content_chars.iter().enumerate() {
+            for (i, ch) in content.chars().enumerate() {
                 buf.get_mut(cx + 1 + i as u16, cy)
-                    .set_char(*ch)
+                    .set_char(ch)
                     .set_style(Style::default().fg(fg).bg(bg));
             }
         }
