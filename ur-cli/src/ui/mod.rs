@@ -10,8 +10,33 @@ pub fn render(f: &mut Frame, app: &App) {
     match &app.screen {
         crate::app::Screen::Title => title::render(f, app.title_selected),
         crate::app::Screen::DifficultySelect { selected } => menu::render_difficulty(f, *selected),
+        crate::app::Screen::DiceOff { state } => menu::render_dice_off(f, state),
         crate::app::Screen::Game => game::render_game(f, app),
-        _ => {}
+        crate::app::Screen::GameOver => {
+            use crate::ui::gameover::{render, GameOverData};
+            use ur_core::player::Player;
+            let winner_is_human = match &app.game_state {
+                Some(gs) => matches!(
+                    &gs.phase,
+                    ur_core::state::GamePhase::GameOver(p) if *p == Player::Player1
+                ),
+                None => false,
+            };
+            let elapsed = app
+                .stats
+                .start_time
+                .map(|t| t.elapsed())
+                .unwrap_or(std::time::Duration::ZERO);
+            render(
+                f,
+                &GameOverData {
+                    winner_is_human,
+                    moves: app.stats.moves,
+                    elapsed,
+                    captures: &app.stats.captures,
+                },
+            );
+        }
     }
 }
 
