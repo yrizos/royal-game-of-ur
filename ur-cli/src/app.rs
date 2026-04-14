@@ -318,14 +318,54 @@ impl App {
         }
     }
 
-    /// Stub for starting the AI turn (implemented in Task 12).
-    #[allow(dead_code)]
+    /// Rolls dice for the AI and either forfeits the turn (if roll is 0 or no
+    /// legal moves exist) or spawns a background thread to run
+    /// [`ur_core::ai::choose_move`], sending the result via an mpsc channel.
     pub fn start_ai_turn(&mut self) {
-        // Implemented in Task 12
+        let gs = match self.game_state.as_ref() {
+            Some(gs) => gs.clone(),
+            None => return,
+        };
+
+        let roll = ur_core::dice::Dice::roll(&mut self.rng);
+        self.log.push(format!("AI rolled {}", roll.value()));
+
+        let moves = gs.legal_moves(roll);
+        if moves.is_empty() {
+            self.log
+                .push("AI has no moves — turn forfeited".to_string());
+            if let Some(new_gs) = gs.forfeit_turn() {
+                self.game_state = Some(new_gs);
+            }
+            return;
+        }
+
+        let depth = self.difficulty;
+        let (tx, rx) = std::sync::mpsc::channel();
+        self.ai_receiver = Some(rx);
+        self.ai_thinking = true;
+        self.dice_roll = Some(roll);
+
+        std::thread::spawn(move || {
+            let chosen = ur_core::ai::choose_move(&gs, roll, depth);
+            let _ = tx.send(chosen);
+        });
     }
 
-    #[allow(dead_code)]
-    pub fn poll_ai_move(&mut self) { /* Task 12 */
+    /// Polls the AI move channel (non-blocking). If a result is ready, clears
+    /// the thinking state and applies the move.
+    pub fn poll_ai_move(&mut self) {
+        let mv = match self.ai_receiver.as_ref() {
+            Some(rx) => match rx.try_recv() {
+                Ok(m) => m,
+                Err(_) => return,
+            },
+            None => return,
+        };
+
+        self.ai_receiver = None;
+        self.ai_thinking = false;
+        self.apply_move(mv);
     }
 }
 
