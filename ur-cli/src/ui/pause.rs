@@ -224,13 +224,7 @@ fn help_lines() -> Vec<Line<'static>> {
 /// Renders the full-screen scrollable help / rules overlay.
 pub fn render_help(f: &mut Frame, scroll: u16) {
     let area = f.size();
-    // Use nearly the full screen, leaving a thin margin.
-    let popup = Rect::new(
-        area.x + 1,
-        area.y,
-        area.width.saturating_sub(2),
-        area.height,
-    );
+    let popup = centered_rect(72, area.height.saturating_sub(2), area);
     f.render_widget(Clear, popup);
 
     let lines = help_lines();
