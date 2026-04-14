@@ -155,7 +155,15 @@ pub fn render_player_panel(
     let scored_str = "● ".repeat(scored as usize);
     let on_board_str = "● ".repeat(on_board as usize);
 
-    let turn_indicator = if is_current { "▶ YOUR TURN" } else { "" };
+    let turn_indicator = if is_current {
+        if is_human {
+            "▶ YOUR TURN"
+        } else {
+            "▶ THINKING..."
+        }
+    } else {
+        ""
+    };
 
     let text = vec![
         Line::from(Span::styled(
