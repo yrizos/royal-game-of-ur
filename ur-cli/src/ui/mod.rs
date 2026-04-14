@@ -10,6 +10,7 @@ pub fn render(f: &mut Frame, app: &App) {
     match &app.screen {
         crate::app::Screen::Title => title::render(f, app.title_selected),
         crate::app::Screen::DifficultySelect { selected } => menu::render_difficulty(f, *selected),
+        crate::app::Screen::Game => game::render_game(f, app),
         _ => {}
     }
 }

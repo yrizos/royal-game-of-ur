@@ -1,6 +1,6 @@
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Widget},
@@ -11,6 +11,8 @@ use ur_core::{
     player::Player,
     state::{Board, GameRules, Move, PieceLocation},
 };
+
+use crate::app::App;
 
 // ── Color constants ──────────────────────────────────────────────────────────
 
@@ -23,8 +25,6 @@ pub const COLOR_SELECT_BG: Color = Color::Yellow;
 // ── Widget ───────────────────────────────────────────────────────────────────
 
 /// Renders the Royal Game of Ur board into a ratatui buffer.
-// Wired in Task 10 (gameplay screen layout).
-#[allow(dead_code)]
 pub struct BoardWidget<'a> {
     pub rules: &'a GameRules,
     pub board: &'a Board,
@@ -113,8 +113,6 @@ pub fn move_source(mv: &Move) -> Option<Square> {
 }
 
 /// Renders a player status panel showing piece counts, captures, and turn indicator.
-// Wired in Task 10 (gameplay screen layout).
-#[allow(dead_code)]
 #[allow(clippy::too_many_arguments)]
 pub fn render_player_panel(
     f: &mut Frame,
@@ -196,8 +194,6 @@ pub fn render_player_panel(
 }
 
 /// Renders the status bar at the bottom of the screen with dice, move count, time, and log info.
-// Wired in Task 10 (gameplay screen layout).
-#[allow(dead_code)]
 #[allow(clippy::too_many_arguments)]
 pub fn render_status_bar(
     f: &mut Frame,
@@ -248,4 +244,131 @@ pub fn render_status_bar(
     ]);
 
     f.render_widget(Paragraph::new(vec![line]), area);
+}
+
+// ── Gameplay screen ──────────────────────────────────────────────────────────
+
+/// Assembles the full gameplay screen: player panels, board, and status bar.
+pub fn render_game(f: &mut Frame, app: &App) {
+    let area = f.size();
+
+    // Layout: main area over 1-line status bar
+    let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Min(10), Constraint::Length(1)])
+        .split(area);
+
+    let main = rows[0];
+    let status_area = rows[1];
+
+    // Board: 8 cols × 5 chars + 1 border = 41 wide. Panels split the remainder.
+    let board_w = 41u16;
+    let panel_w = main.width.saturating_sub(board_w) / 2;
+
+    let cols = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(panel_w),
+            Constraint::Length(board_w),
+            Constraint::Min(panel_w),
+        ])
+        .split(main);
+
+    let game_state = match &app.game_state {
+        Some(gs) => gs,
+        None => return,
+    };
+
+    let rules = &game_state.rules;
+
+    // Collect selected source/target squares
+    let selected_move = app.legal_moves.get(app.selected_move_idx);
+    let selected_sq = selected_move.and_then(move_source);
+    let target_sqs: Vec<_> = app.legal_moves.iter().filter_map(move_target).collect();
+
+    // Render player 1 panel (left)
+    render_player_panel(
+        f,
+        cols[0],
+        ur_core::player::Player::Player1,
+        true, // human
+        game_state.current_player == ur_core::player::Player::Player1,
+        game_state.unplayed[0],
+        game_state.scored[0],
+        rules.piece_count,
+        app.stats.captures[0],
+    );
+
+    // Render board (center), offset 1 row for visual breathing room
+    let board_area = Rect::new(
+        cols[1].x,
+        cols[1].y + 1,
+        cols[1].width,
+        cols[1].height.saturating_sub(2),
+    );
+    BoardWidget {
+        rules,
+        board: &game_state.board,
+        selected_square: selected_sq,
+        target_squares: &target_sqs,
+    }
+    .render(board_area, f.buffer_mut());
+
+    // Render player 2 panel (right)
+    render_player_panel(
+        f,
+        cols[2],
+        ur_core::player::Player::Player2,
+        false, // AI
+        game_state.current_player == ur_core::player::Player::Player2,
+        game_state.unplayed[1],
+        game_state.scored[1],
+        rules.piece_count,
+        app.stats.captures[1],
+    );
+
+    // Status bar
+    let elapsed = app
+        .stats
+        .start_time
+        .map(|t| t.elapsed())
+        .unwrap_or(std::time::Duration::ZERO);
+    render_status_bar(
+        f,
+        status_area,
+        app.dice_roll,
+        app.stats.moves,
+        elapsed,
+        app.log.last().map(|s| s.as_str()),
+        app.log_visible,
+        app.ai_thinking,
+        app.ai_spinner_frame,
+    );
+
+    // Log overlay
+    if app.log_visible {
+        render_log_overlay(f, area, &app.log);
+    }
+}
+
+/// Renders a floating log overlay over the gameplay screen.
+fn render_log_overlay(f: &mut Frame, area: Rect, log: &[String]) {
+    use ratatui::widgets::{List, ListItem};
+    let overlay = Rect::new(
+        area.x + area.width / 4,
+        area.y + 2,
+        area.width / 2,
+        area.height.saturating_sub(4),
+    );
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Game Log [L to close] ");
+    let items: Vec<ListItem> = log
+        .iter()
+        .rev()
+        .map(|e| ListItem::new(e.as_str()))
+        .collect();
+    let list = List::new(items).block(block);
+    f.render_widget(ratatui::widgets::Clear, overlay);
+    f.render_widget(list, overlay);
 }
