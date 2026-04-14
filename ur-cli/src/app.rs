@@ -1,3 +1,4 @@
+use crate::animation::Animation;
 use rand::{rngs::SmallRng, SeedableRng};
 use std::time::Instant;
 use ur_core::{
@@ -60,6 +61,10 @@ pub struct App {
     pub stats: GameStats,
     pub rng: SmallRng,
     pub title_selected: usize,
+    pub animation: Option<Animation>,
+    pub ai_thinking: bool,
+    pub ai_spinner_frame: u32,
+    pub ai_receiver: Option<std::sync::mpsc::Receiver<ur_core::state::Move>>,
 }
 
 impl App {
@@ -77,6 +82,10 @@ impl App {
             stats: GameStats::default(),
             rng: SmallRng::from_entropy(),
             title_selected: 0,
+            animation: None,
+            ai_thinking: false,
+            ai_spinner_frame: 0,
+            ai_receiver: None,
         }
     }
 
