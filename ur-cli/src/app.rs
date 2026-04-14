@@ -335,7 +335,12 @@ impl App {
             self.log
                 .push("AI has no moves — turn forfeited".to_string());
             if let Some(new_gs) = gs.forfeit_turn() {
+                let next_player = new_gs.current_player;
                 self.game_state = Some(new_gs);
+                // Re-trigger if AI still has the turn (e.g., after a rosette extra-turn that rolls 0)
+                if next_player == ur_core::player::Player::Player2 {
+                    self.start_ai_turn();
+                }
             }
             return;
         }
@@ -358,7 +363,14 @@ impl App {
         let mv = match self.ai_receiver.as_ref() {
             Some(rx) => match rx.try_recv() {
                 Ok(m) => m,
-                Err(_) => return,
+                Err(std::sync::mpsc::TryRecvError::Empty) => return,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    // AI thread panicked — clear thinking state to prevent hang
+                    self.ai_receiver = None;
+                    self.ai_thinking = false;
+                    self.log.push("AI error — turn skipped".to_string());
+                    return;
+                }
             },
             None => return,
         };
