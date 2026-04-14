@@ -34,6 +34,9 @@ pub struct DiceOffState {
 /// Number of animation ticks for the dice-off countdown (≈1.5 s at 12 fps).
 const DICE_OFF_ANIMATION_FRAMES: u32 = 18;
 
+/// Number of animation ticks for a dice roll animation (≈0.6 s at 30 fps).
+const DICE_ROLL_ANIMATION_FRAMES: u32 = 18;
+
 /// Difficulty level maps to expectiminimax search depth.
 pub const DIFFICULTIES: [(&str, u32); 3] = [("Easy", 2), ("Medium", 4), ("Hard", 6)];
 
@@ -194,7 +197,7 @@ impl App {
 
         let final_value = Dice::roll(&mut self.rng);
         self.animation = Some(Animation::DiceRoll {
-            frames_remaining: 18,
+            frames_remaining: DICE_ROLL_ANIMATION_FRAMES,
             final_value,
             display: Dice(0),
         });
@@ -288,6 +291,11 @@ impl App {
     ///
     /// Computes legal moves from the rolled dice; forfeits the turn if none exist.
     pub fn on_animation_done(&mut self) {
+        // Only process dice-roll completion. For other animation types (CaptureFlash,
+        // PieceMove), dice_roll is None at this point so this is a no-op.
+        if self.dice_roll.is_none() {
+            return;
+        }
         if let Some(roll) = self.dice_roll {
             if let Some(gs) = &self.game_state {
                 let moves = gs.legal_moves(roll);
