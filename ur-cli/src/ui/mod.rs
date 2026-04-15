@@ -7,25 +7,25 @@ pub mod title;
 use crate::app::App;
 use ratatui::Frame;
 
-pub fn render(f: &mut Frame, app: &App) {
+pub fn render(f: &mut Frame, app: &mut App) {
     match &app.screen {
         crate::app::Screen::Title => title::render(f, app.title_selected),
         crate::app::Screen::DifficultySelect { selected } => menu::render_difficulty(f, *selected),
         crate::app::Screen::DiceOff { state } => menu::render_dice_off(f, state),
         crate::app::Screen::Game => game::render_game(f, app),
         crate::app::Screen::PauseMenu { selected } => {
-            // Render the game underneath, then overlay the pause menu.
+            let sel = *selected;
             game::render_game(f, app);
-            pause::render_pause_menu(f, *selected);
+            pause::render_pause_menu(f, sel);
         }
         crate::app::Screen::Help { from_game } => {
-            // Render the appropriate screen underneath, then overlay the help panel.
-            if *from_game {
+            let from = *from_game;
+            if from {
                 game::render_game(f, app);
             } else {
                 title::render(f, app.title_selected);
             }
-            pause::render_help(f, app.help_scroll);
+            pause::render_help(f, &mut app.help_scroll);
         }
         crate::app::Screen::GameOver => {
             use crate::ui::gameover::{render, GameOverData};

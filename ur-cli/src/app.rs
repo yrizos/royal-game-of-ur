@@ -3,7 +3,7 @@ use rand::{rngs::SmallRng, SeedableRng};
 use std::time::Instant;
 use ur_core::{
     dice::Dice,
-    state::{GameState, Move},
+    state::{GameState, Move, PieceLocation},
 };
 
 /// Which screen is currently active.
@@ -73,7 +73,8 @@ pub struct App {
     pub game_state: Option<GameState>,
     pub dice_roll: Option<Dice>,
     pub legal_moves: Vec<Move>,
-    pub selected_move_idx: usize,
+    /// Cursor position along the player's path. 0 = pool, 1..=14 = path steps.
+    pub cursor_path_pos: usize,
     pub log: Vec<String>,
     pub log_visible: bool,
     pub stats: GameStats,
@@ -96,7 +97,7 @@ impl App {
             game_state: None,
             dice_roll: None,
             legal_moves: Vec::new(),
-            selected_move_idx: 0,
+            cursor_path_pos: 0,
             log: Vec::new(),
             log_visible: false,
             stats: GameStats::default(),
@@ -151,7 +152,7 @@ impl App {
         self.log.clear();
         self.dice_roll = None;
         self.legal_moves.clear();
-        self.selected_move_idx = 0;
+        self.cursor_path_pos = 0;
         self.animation = None;
         self.ai_thinking = false;
         self.ai_receiver = None;
@@ -307,36 +308,70 @@ impl App {
         self.dice_roll = Some(final_value);
     }
 
-    /// Cycles the move selection to the previous legal move.
+    /// Total cursor positions: 0 = pool, 1..=14 = path steps.
+    const PATH_CURSOR_COUNT: usize = 15;
+
+    /// Moves the path cursor to the previous position (wrapping).
     pub fn handle_select_prev(&mut self) {
-        if self.legal_moves.is_empty() {
-            return;
-        }
-        if self.selected_move_idx == 0 {
-            self.selected_move_idx = self.legal_moves.len() - 1;
+        if self.cursor_path_pos == 0 {
+            self.cursor_path_pos = Self::PATH_CURSOR_COUNT - 1;
         } else {
-            self.selected_move_idx -= 1;
+            self.cursor_path_pos -= 1;
         }
     }
 
-    /// Cycles the move selection to the next legal move.
+    /// Moves the path cursor to the next position (wrapping).
     pub fn handle_select_next(&mut self) {
-        if self.legal_moves.is_empty() {
-            return;
-        }
-        self.selected_move_idx = (self.selected_move_idx + 1) % self.legal_moves.len();
+        self.cursor_path_pos = (self.cursor_path_pos + 1) % Self::PATH_CURSOR_COUNT;
     }
 
-    /// Confirms the currently selected move and applies it.
+    /// Confirms the move at the current cursor position, if one exists.
     pub fn handle_confirm_move(&mut self) {
         if self.animation.is_some() {
             return;
         }
-        let mv = match self.legal_moves.get(self.selected_move_idx) {
+        let mv = match self.legal_move_at_cursor() {
             Some(m) => m.clone(),
             None => return,
         };
         self.apply_move(mv);
+    }
+
+    /// Returns the legal move whose source matches the current cursor position.
+    pub fn legal_move_at_cursor(&self) -> Option<&Move> {
+        let gs = self.game_state.as_ref()?;
+        let path = gs.rules.path_for(gs.current_player);
+        let from_loc = if self.cursor_path_pos == 0 {
+            PieceLocation::Unplayed
+        } else {
+            PieceLocation::OnBoard(path.get(self.cursor_path_pos - 1)?)
+        };
+        self.legal_moves.iter().find(|m| m.from == from_loc)
+    }
+
+    /// Snaps the cursor to the path position of the first legal move.
+    fn snap_cursor_to_first_move(&mut self) {
+        let first = match self.legal_moves.first() {
+            Some(m) => m,
+            None => {
+                self.cursor_path_pos = 0;
+                return;
+            }
+        };
+        match &first.from {
+            PieceLocation::Unplayed => {
+                self.cursor_path_pos = 0;
+            }
+            PieceLocation::OnBoard(sq) => {
+                if let Some(gs) = &self.game_state {
+                    let path = gs.rules.path_for(gs.current_player);
+                    self.cursor_path_pos = path.index_of(*sq).map(|i| i + 1).unwrap_or(0);
+                }
+            }
+            _ => {
+                self.cursor_path_pos = 0;
+            }
+        }
     }
 
     /// Applies a move to the current game state and handles turn transitions.
@@ -378,7 +413,7 @@ impl App {
         self.game_state = Some(result.new_state.clone());
         self.dice_roll = None;
         self.legal_moves.clear();
-        self.selected_move_idx = 0;
+        self.cursor_path_pos = 0;
 
         if result.game_over {
             self.screen = Screen::GameOver;
@@ -446,7 +481,7 @@ impl App {
                     self.dice_roll = None;
                 } else {
                     self.legal_moves = moves;
-                    self.selected_move_idx = 0;
+                    self.snap_cursor_to_first_move();
                 }
             }
         }
@@ -605,22 +640,18 @@ mod tests {
     }
 
     #[test]
-    fn test_select_next_wraps_within_legal_moves() {
+    fn test_select_next_wraps_path_cursor() {
         let mut app = App::new();
-        app.legal_moves = vec![
-            ur_core::state::Move {
-                piece: ur_core::player::Piece::new(ur_core::player::Player::Player1, 0),
-                from: ur_core::state::PieceLocation::Unplayed,
-                to: ur_core::state::PieceLocation::OnBoard(ur_core::board::Square::new(2, 3)),
-            },
-            ur_core::state::Move {
-                piece: ur_core::player::Piece::new(ur_core::player::Player::Player1, 1),
-                from: ur_core::state::PieceLocation::Unplayed,
-                to: ur_core::state::PieceLocation::OnBoard(ur_core::board::Square::new(2, 3)),
-            },
-        ];
-        app.selected_move_idx = 1;
+        app.cursor_path_pos = App::PATH_CURSOR_COUNT - 1;
         app.handle_select_next();
-        assert_eq!(app.selected_move_idx, 0); // wraps to 0
+        assert_eq!(app.cursor_path_pos, 0);
+    }
+
+    #[test]
+    fn test_select_prev_wraps_path_cursor() {
+        let mut app = App::new();
+        app.cursor_path_pos = 0;
+        app.handle_select_prev();
+        assert_eq!(app.cursor_path_pos, App::PATH_CURSOR_COUNT - 1);
     }
 }

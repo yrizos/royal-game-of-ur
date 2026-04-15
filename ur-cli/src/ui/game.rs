@@ -9,7 +9,7 @@ use ratatui::{
 use ur_core::{
     board::Square,
     player::Player,
-    state::{Board, GameRules, Move, PieceLocation},
+    state::{Board, GameRules, PieceLocation},
 };
 
 use crate::app::App;
@@ -20,23 +20,140 @@ pub const COLOR_P1: Color = Color::LightBlue;
 pub const COLOR_P2: Color = Color::LightRed;
 pub const COLOR_ROSETTE_BG: Color = Color::Rgb(61, 43, 31);
 pub const COLOR_ROSETTE_FG: Color = Color::Yellow;
-pub const COLOR_SELECT_BG: Color = Color::Yellow;
+const COLOR_SELECTED_BG: Color = Color::Rgb(30, 60, 30);
+const COLOR_TARGET_BG: Color = Color::Rgb(40, 20, 60);
+
+// ── Board geometry helpers ───────────────────────────────────────────────────
+
+#[derive(Clone, Copy)]
+enum BK {
+    Top,
+    Fh,
+    Tc,
+    Nh,
+    To,
+    Bot,
+}
+
+fn draw_hborder(buf: &mut Buffer, bx: u16, y: u16, cw: u16, kind: BK, style: Style) {
+    let ml = cw + 1;
+    let mr = 2 * cw + 2;
+    let rr = 3 * cw + 3;
+
+    match kind {
+        BK::Nh => {
+            buf.get_mut(bx + ml, y)
+                .set_char('\u{251c}')
+                .set_style(style);
+            for dx in 1..=cw {
+                buf.get_mut(bx + ml + dx, y)
+                    .set_char('\u{2500}')
+                    .set_style(style);
+            }
+            buf.get_mut(bx + mr, y)
+                .set_char('\u{2524}')
+                .set_style(style);
+        }
+        _ => {
+            let (l, lm, rm, r) = match kind {
+                BK::Top => ('\u{250c}', '\u{252c}', '\u{252c}', '\u{2510}'),
+                BK::Fh => ('\u{251c}', '\u{253c}', '\u{253c}', '\u{2524}'),
+                BK::Tc => ('\u{2514}', '\u{253c}', '\u{253c}', '\u{2518}'),
+                BK::To => ('\u{250c}', '\u{253c}', '\u{253c}', '\u{2510}'),
+                BK::Bot => ('\u{2514}', '\u{2534}', '\u{2534}', '\u{2518}'),
+                BK::Nh => unreachable!(),
+            };
+            buf.get_mut(bx, y).set_char(l).set_style(style);
+            for dx in 1..ml {
+                buf.get_mut(bx + dx, y)
+                    .set_char('\u{2500}')
+                    .set_style(style);
+            }
+            buf.get_mut(bx + ml, y).set_char(lm).set_style(style);
+            for dx in (ml + 1)..mr {
+                buf.get_mut(bx + dx, y)
+                    .set_char('\u{2500}')
+                    .set_style(style);
+            }
+            buf.get_mut(bx + mr, y).set_char(rm).set_style(style);
+            for dx in (mr + 1)..rr {
+                buf.get_mut(bx + dx, y)
+                    .set_char('\u{2500}')
+                    .set_style(style);
+            }
+            buf.get_mut(bx + rr, y).set_char(r).set_style(style);
+        }
+    }
+}
+
+/// Computes cell dimensions from available grid height.
+///
+/// Returns `(cell_w, cell_h)`. Only odd heights (1, 3, 5) are used so
+/// symbols always land on a true center row. Cell width is `2*h + 1`
+/// for a roughly-square look in a monospace terminal.
+fn cell_dims(grid_h: u16) -> (u16, u16) {
+    // 8 cells + 9 border rows → ch=5 needs 49, ch=3 needs 33, ch=1 needs 17
+    let ch: u16 = if grid_h >= 49 {
+        5
+    } else if grid_h >= 33 {
+        3
+    } else {
+        1
+    };
+    let cw = ch * 2 + 1;
+    (cw, ch)
+}
 
 // ── Widget ───────────────────────────────────────────────────────────────────
 
-/// Renders the Royal Game of Ur board into a ratatui buffer.
+/// Renders the Royal Game of Ur board with dynamic cell sizing and full borders.
 pub struct BoardWidget<'a> {
     pub rules: &'a GameRules,
     pub board: &'a Board,
+    /// The currently selected piece's source square (highlighted bg).
     pub selected_square: Option<Square>,
-    pub target_squares: &'a [Square],
-    /// Optional animation state to overlay on the board.
+    /// Where the selected piece would land (preview bg).
+    pub target_square: Option<Square>,
+    /// Piece counts: [Player1, Player2].
+    pub unplayed: [u8; 2],
+    pub scored: [u8; 2],
+    /// True when the selected move enters from pool (highlight pool indicator).
+    pub pool_selected: bool,
     pub animation: Option<&'a crate::animation::Animation>,
+    pub cell_w: u16,
+    pub cell_h: u16,
 }
 
 impl<'a> Widget for BoardWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // Determine animation state once for reuse in per-square rendering.
+        let cw = self.cell_w;
+        let ch = self.cell_h;
+        let total_w = 3 * cw + 4;
+        let total_h = 8 * ch + 9;
+
+        if area.width < total_w || area.height < total_h {
+            return;
+        }
+
+        let bx = area.x + (area.width - total_w) / 2;
+        let by = area.y + (area.height - total_h) / 2;
+        let bs = Style::default().fg(Color::DarkGray);
+
+        // ── Horizontal borders ─────────────────────────────────────────
+        for i in 0..=8u16 {
+            let y = by + i * (ch + 1);
+            let kind = match i {
+                0 => BK::Top,
+                4 => BK::Tc,
+                5 => BK::Nh,
+                6 => BK::To,
+                8 => BK::Bot,
+                _ => BK::Fh,
+            };
+            draw_hborder(buf, bx, y, cw, kind, bs);
+        }
+
+        // ── Animation state ────────────────────────────────────────────
         let capture_flash_sq: Option<Square> = match self.animation {
             Some(crate::animation::Animation::CaptureFlash {
                 square,
@@ -44,22 +161,13 @@ impl<'a> Widget for BoardWidget<'a> {
             }) if *frames_remaining % 2 == 1 => Some(*square),
             _ => None,
         };
-
         let piece_move_ghost: Option<Square> = match self.animation {
-            Some(crate::animation::Animation::PieceMove {
-                remaining,
-                is_player1,
-                ..
-            }) => remaining.first().map(|&sq| {
-                // Tag with player via a side-channel: store player in a local for use
-                // in the per-square branch below. We use a separate extraction.
-                let _ = is_player1; // used below via ghost_is_player1
-                sq
-            }),
+            Some(crate::animation::Animation::PieceMove { remaining, .. }) => {
+                remaining.first().copied()
+            }
             _ => None,
         };
-
-        let ghost_is_player1: bool = matches!(
+        let ghost_is_p1: bool = matches!(
             self.animation,
             Some(crate::animation::Animation::PieceMove {
                 is_player1: true,
@@ -67,131 +175,170 @@ impl<'a> Widget for BoardWidget<'a> {
             })
         );
 
+        // ── Cell contents ──────────────────────────────────────────────
         for &sq in self.rules.board_shape.valid_squares() {
-            // Vertical board: board columns map to screen rows (top = col 0),
-            // board rows map to screen columns with P1 (row 2) on the left and
-            // P2 (row 0) on the right.
-            let screen_col = 2u16.saturating_sub(sq.row as u16);
-            let cx = area.x + screen_col * 5;
-            let cy = area.y + sq.col as u16;
-
-            // Skip squares that fall outside the render area.
-            if cx + 3 >= area.x + area.width || cy >= area.y + area.height {
-                continue;
-            }
+            let sc = 2u16.saturating_sub(sq.row as u16);
+            let cx = bx + sc * (cw + 1) + 1;
+            let cy = by + sq.col as u16 * (ch + 1) + 1;
 
             let is_selected = self.selected_square == Some(sq);
-            let is_target = self.target_squares.contains(&sq);
+            let is_target = self.target_square == Some(sq);
             let is_rosette = self.rules.board_shape.is_rosette(sq);
             let occupant = self.board.get(sq);
 
-            // ── CaptureFlash overlay ─────────────────────────────────────────
-            if capture_flash_sq == Some(sq) {
-                // Flash the captured piece in red on odd frames.
-                let style = Style::default().fg(Color::LightRed).bg(Color::Reset);
-                buf.get_mut(cx, cy)
-                    .set_char('\u{2502}')
-                    .set_style(Style::default().fg(Color::DarkGray).bg(Color::Reset));
-                for (i, ch) in " \u{25CF} ".chars().enumerate() {
-                    buf.get_mut(cx + 1 + i as u16, cy)
-                        .set_char(ch)
-                        .set_style(style);
-                }
-                continue;
-            }
-
-            // ── PieceMove ghost overlay ──────────────────────────────────────
-            if piece_move_ghost == Some(sq) {
-                let ghost_color = if ghost_is_player1 { COLOR_P1 } else { COLOR_P2 };
-                let ghost_bg = if is_rosette {
+            let (sym, fg, bg) = if capture_flash_sq == Some(sq) {
+                ('\u{25cf}', Color::LightRed, Color::Reset)
+            } else if piece_move_ghost == Some(sq) {
+                let gc = if ghost_is_p1 { COLOR_P1 } else { COLOR_P2 };
+                let gb = if is_rosette {
                     COLOR_ROSETTE_BG
                 } else {
-                    Color::Rgb(18, 15, 12)
+                    Color::Reset
                 };
-                let ghost_style = Style::default()
-                    .fg(ghost_color)
-                    .bg(ghost_bg)
-                    .add_modifier(Modifier::DIM);
-                buf.get_mut(cx, cy)
-                    .set_char('\u{2502}')
-                    .set_style(Style::default().fg(Color::DarkGray).bg(ghost_bg));
-                for (i, ch) in " \u{25CF} ".chars().enumerate() {
-                    buf.get_mut(cx + 1 + i as u16, cy)
-                        .set_char(ch)
-                        .set_style(ghost_style);
+                ('\u{25cf}', gc, gb)
+            } else if is_selected {
+                if let Some(piece) = occupant {
+                    let pc = match piece.player {
+                        Player::Player1 => COLOR_P1,
+                        Player::Player2 => COLOR_P2,
+                    };
+                    ('\u{25cf}', pc, COLOR_SELECTED_BG)
+                } else if is_rosette {
+                    ('\u{2726}', COLOR_ROSETTE_FG, COLOR_SELECTED_BG)
+                } else {
+                    (' ', Color::Reset, COLOR_SELECTED_BG)
                 }
-                continue;
-            }
-
-            // Determine background color.
-            const COLOR_EMPTY_BG: Color = Color::Rgb(18, 15, 12);
-            let bg = if is_selected {
-                COLOR_SELECT_BG
-            } else if is_rosette {
-                COLOR_ROSETTE_BG
             } else if is_target {
-                Color::Rgb(20, 40, 20)
-            } else {
-                COLOR_EMPTY_BG
-            };
-
-            // Determine content string and foreground color.
-            let (content, fg) = if let Some(piece) = occupant {
-                let player_color = match piece.player {
+                if let Some(piece) = occupant {
+                    let pc = match piece.player {
+                        Player::Player1 => COLOR_P1,
+                        Player::Player2 => COLOR_P2,
+                    };
+                    ('\u{25cf}', pc, COLOR_TARGET_BG)
+                } else if is_rosette {
+                    ('\u{2726}', COLOR_ROSETTE_FG, COLOR_TARGET_BG)
+                } else {
+                    (' ', Color::Reset, COLOR_TARGET_BG)
+                }
+            } else if let Some(piece) = occupant {
+                let pc = match piece.player {
                     Player::Player1 => COLOR_P1,
                     Player::Player2 => COLOR_P2,
                 };
-                let fg = if is_selected {
-                    Color::Black
+                let bg = if is_rosette {
+                    COLOR_ROSETTE_BG
                 } else {
-                    player_color
+                    Color::Reset
                 };
-                (" \u{25CF} ", fg) // " ● "
-            } else if is_target {
-                (" \u{00B7} ", Color::DarkGray) // " · "
+                ('\u{25cf}', pc, bg)
             } else if is_rosette {
-                (" \u{2726} ", COLOR_ROSETTE_FG) // " ✦ "
+                ('\u{2726}', COLOR_ROSETTE_FG, COLOR_ROSETTE_BG)
             } else {
-                ("   ", Color::Reset)
+                (' ', Color::Reset, Color::Reset)
             };
 
-            // Draw the left border character.
-            buf.get_mut(cx, cy)
-                .set_char('\u{2502}') // │
-                .set_style(Style::default().fg(Color::DarkGray).bg(bg));
+            if bg != Color::Reset {
+                let cell_bg = Style::default().bg(bg);
+                for dy in 0..ch {
+                    for dx in 0..cw {
+                        buf.get_mut(cx + dx, cy + dy)
+                            .set_char(' ')
+                            .set_style(cell_bg);
+                    }
+                }
+            }
 
-            // Draw the 3-char content cells.
-            for (i, ch) in content.chars().enumerate() {
-                buf.get_mut(cx + 1 + i as u16, cy)
-                    .set_char(ch)
-                    .set_style(Style::default().fg(fg).bg(bg));
+            if sym != ' ' {
+                let sx = cx + (cw - 1) / 2;
+                let sy = cy + (ch.saturating_sub(1)) / 2;
+                let ss = Style::default().fg(fg).bg(bg);
+                buf.get_mut(sx, sy).set_char(sym).set_style(ss);
             }
         }
 
-        // ── Closing right borders ────────────────────────────────────────────
-        // For rows 0-3 and 6-7 all three screen columns are present → border at col 2 + 4.
-        // For rows 4-5 only the shared (middle) column is present → border at col 1 + 4.
-        let border_style = Style::default().fg(Color::DarkGray).bg(Color::Reset);
-        for board_col in 0u8..8 {
-            let cy = area.y + board_col as u16;
-            if cy >= area.y + area.height {
-                continue;
-            }
-            if board_col == 4 || board_col == 5 {
-                // Only shared column — close it at screen col 1 right edge.
-                let rx = area.x + 9;
-                if rx < area.x + area.width {
-                    buf.get_mut(rx, cy)
+        // ── Vertical borders ───────────────────────────────────────────
+        for game_col in 0..8u8 {
+            let narrow = game_col == 4 || game_col == 5;
+            let cy_base = by + game_col as u16 * (ch + 1) + 1;
+
+            for dy in 0..ch {
+                let y = cy_base + dy;
+                if narrow {
+                    buf.get_mut(bx + cw + 1, y)
                         .set_char('\u{2502}')
-                        .set_style(border_style);
+                        .set_style(bs);
+                    buf.get_mut(bx + 2 * cw + 2, y)
+                        .set_char('\u{2502}')
+                        .set_style(bs);
+                } else {
+                    for &vx in &[0, cw + 1, 2 * cw + 2, 3 * cw + 3] {
+                        buf.get_mut(bx + vx, y).set_char('\u{2502}').set_style(bs);
+                    }
                 }
-            } else {
-                // All three columns — close at screen col 2 right edge.
-                let rx = area.x + 2 * 5 + 4;
-                if rx < area.x + area.width {
-                    buf.get_mut(rx, cy)
-                        .set_char('\u{2502}')
-                        .set_style(border_style);
+            }
+        }
+
+        // ── Unplayed / scored indicators in the H-gap ───────────────────
+        // P1 = row 2 → screen col 0, P2 = row 0 → screen col 2.
+        // Col 4 (below entry) = unplayed, Col 5 (above exit) = scored.
+        let colors = [COLOR_P1, COLOR_P2];
+        let screen_cols: [u16; 2] = [0, 2];
+        for pi in 0..2usize {
+            let sc = screen_cols[pi];
+            let pc = colors[pi];
+            let cx = bx + sc * (cw + 1) + 1;
+
+            // Unplayed (gap col 4)
+            let count = self.unplayed[pi];
+            if count > 0 {
+                let gy = by + 4 * (ch + 1) + 1;
+                let mid_x = cx + (cw - 1) / 2;
+                let mid_y = gy + (ch.saturating_sub(1)) / 2;
+
+                let is_pool_hl = pi == 0 && self.pool_selected;
+                let bg = if is_pool_hl {
+                    COLOR_SELECTED_BG
+                } else {
+                    Color::Reset
+                };
+                if is_pool_hl {
+                    let cell_bg = Style::default().bg(bg);
+                    for dy in 0..ch {
+                        for dx in 0..cw {
+                            buf.get_mut(cx + dx, gy + dy)
+                                .set_char(' ')
+                                .set_style(cell_bg);
+                        }
+                    }
+                }
+
+                let sx = if cw >= 5 { mid_x - 1 } else { mid_x };
+                buf.get_mut(sx, mid_y)
+                    .set_char('\u{25cf}')
+                    .set_style(Style::default().fg(pc).bg(bg));
+                if cw >= 5 {
+                    let digit = char::from(b'0' + count);
+                    buf.get_mut(sx + 2, mid_y)
+                        .set_char(digit)
+                        .set_style(Style::default().fg(pc).bg(bg).add_modifier(Modifier::DIM));
+                }
+            }
+
+            // Scored (gap col 5)
+            let scored = self.scored[pi];
+            if scored > 0 {
+                let gy = by + 5 * (ch + 1) + 1;
+                let mid_x = cx + (cw - 1) / 2;
+                let mid_y = gy + (ch.saturating_sub(1)) / 2;
+                let sx = if cw >= 5 { mid_x - 1 } else { mid_x };
+                buf.get_mut(sx, mid_y)
+                    .set_char('\u{25cf}')
+                    .set_style(Style::default().fg(pc).add_modifier(Modifier::BOLD));
+                if cw >= 5 {
+                    let digit = char::from(b'0' + scored);
+                    buf.get_mut(sx + 2, mid_y)
+                        .set_char(digit)
+                        .set_style(Style::default().fg(pc));
                 }
             }
         }
@@ -200,33 +347,13 @@ impl<'a> Widget for BoardWidget<'a> {
 
 // ── Helper functions ─────────────────────────────────────────────────────────
 
-/// Returns the destination square of `mv` if it lands on the board.
-pub fn move_target(mv: &Move) -> Option<Square> {
-    match mv.to {
-        PieceLocation::OnBoard(sq) => Some(sq),
-        _ => None,
-    }
-}
-
-/// Returns the source square of `mv` if the piece was on the board.
-pub fn move_source(mv: &Move) -> Option<Square> {
-    match mv.from {
-        PieceLocation::OnBoard(sq) => Some(sq),
-        _ => None,
-    }
-}
-
-/// Renders a player status panel showing piece counts, captures, and turn indicator.
-#[allow(clippy::too_many_arguments)]
+/// Renders a player status panel showing captures and turn indicator.
 pub fn render_player_panel(
     f: &mut Frame,
     area: Rect,
     player: Player,
     is_human: bool,
     is_current: bool,
-    unplayed: u8,
-    scored: u8,
-    total: u8,
     captures: u32,
 ) {
     let color = if player == Player::Player1 {
@@ -251,36 +378,17 @@ pub fn render_player_panel(
         })
         .title(Span::styled(format!(" {} ", name), title_style));
 
-    let on_board = total.saturating_sub(unplayed).saturating_sub(scored);
-
-    let unplayed_str = "● ".repeat(unplayed as usize);
-    let scored_str = "● ".repeat(scored as usize);
-    let on_board_str = "● ".repeat(on_board as usize);
-
     let turn_indicator = if is_current {
         if is_human {
-            "▶ YOUR TURN"
+            "\u{25b6} YOUR TURN"
         } else {
-            "▶ THINKING..."
+            "\u{25b6} THINKING..."
         }
     } else {
         ""
     };
 
     let text = vec![
-        Line::from(Span::styled(
-            format!("Waiting: {}", unplayed_str),
-            Style::default().fg(color),
-        )),
-        Line::from(Span::styled(
-            format!("Board:   {}", on_board_str),
-            Style::default().fg(color),
-        )),
-        Line::from(Span::styled(
-            format!("Scored:  {}", scored_str),
-            Style::default().fg(Color::DarkGray),
-        )),
-        Line::from(""),
         Line::from(Span::styled(
             format!("Captures: {}", captures),
             Style::default().fg(Color::Gray),
@@ -315,14 +423,14 @@ pub fn render_status_bar(
 
     let dice_str = match dice_roll {
         Some(d) => {
-            let filled = "●".repeat(d.value() as usize);
-            let empty = "○".repeat((4 - d.value()) as usize);
+            let filled = "\u{25cf}".repeat(d.value() as usize);
+            let empty = "\u{25cb}".repeat((4 - d.value()) as usize);
             format!("Dice: {}{} = {}  ", filled, empty, d.value())
         }
-        None => "Dice: —        ".to_string(),
+        None => "Dice: \u{2014}        ".to_string(),
     };
 
-    let spinner = ["⠋", "⠙", "⠹", "⠸"][ai_spinner_frame as usize % 4];
+    let spinner = ["\u{280b}", "\u{2819}", "\u{2839}", "\u{2838}"][ai_spinner_frame as usize % 4];
     let ai_str = if ai_thinking {
         format!("{} AI thinking  ", spinner)
     } else {
@@ -340,7 +448,10 @@ pub fn render_status_bar(
         "{} Moves: {}  Time: {}  {}  {}",
         dice_str, moves, time_str, ai_str, log_entry
     );
-    let right = format!("  Spc=Roll  ↑↓=Select  Enter=Move  Esc=Pause  {}", log_hint);
+    let right = format!(
+        "  Spc=Roll  \u{2191}\u{2193}=Select  Enter=Move  Esc=Pause  {}",
+        log_hint
+    );
 
     let line = Line::from(vec![
         Span::styled(left, Style::default().fg(Color::Gray)),
@@ -356,7 +467,6 @@ pub fn render_status_bar(
 pub fn render_game(f: &mut Frame, app: &App) {
     let area = f.size();
 
-    // Layout: main area over 1-line status bar
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Min(10), Constraint::Length(1)])
@@ -365,9 +475,12 @@ pub fn render_game(f: &mut Frame, app: &App) {
     let main = rows[0];
     let status_area = rows[1];
 
-    // Board: 3 rows × 5 chars + 1 closing border = 16 wide, 8 rows tall.
-    // P1 (row 2) on left, shared (row 1) in middle, P2 (row 0) on right.
-    let board_w = 16u16;
+    // Dynamic cell sizing: fill available height with properly bordered squares.
+    let grid_avail = main.height.saturating_sub(1); // 1 row for column headers
+    let (cw, ch) = cell_dims(grid_avail);
+    let board_w = 3 * cw + 4;
+    let board_h = 8 * ch + 9;
+
     let panel_w = main.width.saturating_sub(board_w) / 2;
 
     let cols = Layout::default()
@@ -386,80 +499,86 @@ pub fn render_game(f: &mut Frame, app: &App) {
 
     let rules = &game_state.rules;
 
-    // Collect selected source/target squares
-    let selected_move = app.legal_moves.get(app.selected_move_idx);
-    let selected_sq = selected_move.and_then(move_source);
-    // Show only move destinations for the currently selected piece (same source square).
-    let target_sqs: Vec<_> = app
-        .legal_moves
-        .iter()
-        .filter(|m| move_source(m) == selected_sq)
-        .filter_map(move_target)
-        .collect();
+    let path = rules.path_for(game_state.current_player);
+    let pool_selected = app.cursor_path_pos == 0;
+    let selected_square = if app.cursor_path_pos == 0 {
+        None
+    } else {
+        path.get(app.cursor_path_pos - 1)
+    };
 
-    // Render player 1 panel (left)
+    let cursor_move = app.legal_move_at_cursor();
+    let target_square = cursor_move.and_then(|mv| match mv.to {
+        PieceLocation::OnBoard(sq) => Some(sq),
+        _ => None,
+    });
+
+    // Player panels
     render_player_panel(
         f,
         cols[0],
-        ur_core::player::Player::Player1,
-        true, // human
-        game_state.current_player == ur_core::player::Player::Player1,
-        game_state.unplayed[0],
-        game_state.scored[0],
-        rules.piece_count,
+        Player::Player1,
+        true,
+        game_state.current_player == Player::Player1,
         app.stats.captures[0],
     );
+    render_player_panel(
+        f,
+        cols[2],
+        Player::Player2,
+        false,
+        game_state.current_player == Player::Player2,
+        app.stats.captures[1],
+    );
 
-    // Render board (center), with 1-row column headers and 1-row bottom margin.
-    // Column headers: P1 (left) · shared (mid) · P2 (right).
-    let header_y = cols[1].y + 1;
+    // Column headers centered above each board column
+    let header_y = cols[1].y;
     if header_y < cols[1].y + cols[1].height {
-        use ratatui::buffer::Buffer as Buf;
-        let buf: &mut Buf = f.buffer_mut();
-        let bx = cols[1].x;
+        let bx_center = cols[1].x + (cols[1].width.saturating_sub(board_w)) / 2;
+        let hbuf = f.buffer_mut();
         let headers: [(&str, Color); 3] = [
-            ("YOU ", COLOR_P1),
-            (" \u{25c6}  ", Color::DarkGray), // ◆
-            (" AI ", COLOR_P2),
+            ("YOU", COLOR_P1),
+            ("\u{25c6}", Color::DarkGray),
+            ("AI", COLOR_P2),
         ];
         for (i, (label, fg)) in headers.iter().enumerate() {
-            let cx = bx + i as u16 * 5;
-            for (j, ch) in label.chars().enumerate() {
-                if cx + j as u16 + 1 < bx + cols[1].width {
-                    buf.get_mut(cx + j as u16, header_y)
-                        .set_char(ch)
+            let col_x = bx_center + i as u16 * (cw + 1) + 1;
+            let label_w: u16 = label.chars().count() as u16;
+            let pad = cw.saturating_sub(label_w) / 2;
+            for (j, c) in label.chars().enumerate() {
+                let x = col_x + pad + j as u16;
+                if x < cols[1].x + cols[1].width {
+                    hbuf.get_mut(x, header_y)
+                        .set_char(c)
                         .set_style(Style::default().fg(*fg).add_modifier(Modifier::BOLD));
                 }
             }
         }
     }
+
+    // Board area (below header, vertically centered in remaining space)
+    let below_header = main.height.saturating_sub(1);
+    let vert_pad = below_header.saturating_sub(board_h) / 2;
     let board_area = Rect::new(
         cols[1].x,
-        cols[1].y + 2,
+        cols[1].y + 1 + vert_pad,
         cols[1].width,
-        cols[1].height.saturating_sub(3),
+        board_h.min(below_header),
     );
+
     BoardWidget {
         rules,
         board: &game_state.board,
-        selected_square: selected_sq,
-        target_squares: &target_sqs,
+        selected_square,
+        target_square,
+        unplayed: game_state.unplayed,
+        scored: game_state.scored,
+        pool_selected,
         animation: app.animation.as_ref(),
+        cell_w: cw,
+        cell_h: ch,
     }
     .render(board_area, f.buffer_mut());
-
-    // Render player 2 panel (right)
-    render_player_panel(
-        f,
-        cols[2],
-        ur_core::player::Player::Player2,
-        false, // AI
-        game_state.current_player == ur_core::player::Player::Player2,
-        game_state.unplayed[1],
-        game_state.scored[1],
-        rules.piece_count,
-        app.stats.captures[1],
-    );
 
     // Status bar
     let elapsed = app
