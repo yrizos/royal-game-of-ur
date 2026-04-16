@@ -26,7 +26,6 @@ const COLOR_TARGET_BG: Color = Color::Rgb(40, 20, 60);
 
 /// Describes what the dice widget inside a player panel should show.
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)] // variants are constructed in compute_panel_dice (Task 5)
 pub enum PanelDice {
     /// Nothing to show (panel is inactive and no prior roll to display).
     Hidden,
@@ -512,12 +511,47 @@ pub fn render_player_panel(
     f.render_widget(Paragraph::new(text), inner);
 }
 
-/// Renders the status bar at the bottom of the screen with dice, move count, time, and log info.
+/// Computes what the dice widget should display for `player`'s panel.
+fn compute_panel_dice(app: &crate::app::App, player: Player) -> PanelDice {
+    let gs = match &app.game_state {
+        Some(gs) => gs,
+        None => return PanelDice::Hidden,
+    };
+
+    if gs.current_player == player {
+        // Active player — show current roll state.
+        if app.rosette_reroll && app.pending_roll {
+            return PanelDice::RosettePending;
+        }
+        if app.pending_roll {
+            return PanelDice::Pending;
+        }
+        if let Some(roll) = app.dice_roll {
+            if app.forfeit_after.is_some() {
+                return PanelDice::NoMoves(roll);
+            }
+            if let Some(crate::animation::Animation::DiceRoll { display, .. }) = &app.animation {
+                return PanelDice::Animating(*display);
+            }
+            return PanelDice::Result(roll);
+        }
+        PanelDice::Hidden
+    } else {
+        // Inactive panel — show AI's last roll dimmed (only in Player2's panel).
+        if player == Player::Player2 {
+            if let Some(roll) = app.last_opponent_roll {
+                return PanelDice::LastRoll(roll);
+            }
+        }
+        PanelDice::Hidden
+    }
+}
+
+/// Renders the status bar at the bottom of the screen with move count, time, and log info.
 #[allow(clippy::too_many_arguments)]
 pub fn render_status_bar(
     f: &mut Frame,
     area: Rect,
-    dice_roll: Option<ur_core::dice::Dice>,
     moves: u32,
     elapsed: std::time::Duration,
     last_log: Option<&str>,
@@ -527,15 +561,6 @@ pub fn render_status_bar(
 ) {
     let secs = elapsed.as_secs();
     let time_str = format!("{:02}:{:02}", secs / 60, secs % 60);
-
-    let dice_str = match dice_roll {
-        Some(d) => {
-            let filled = "\u{25cf}".repeat(d.value() as usize);
-            let empty = "\u{25cb}".repeat((4 - d.value()) as usize);
-            format!("Dice: {}{} = {}  ", filled, empty, d.value())
-        }
-        None => "Dice: \u{2014}        ".to_string(),
-    };
 
     let spinner = ["\u{280b}", "\u{2819}", "\u{2839}", "\u{2838}"][ai_spinner_frame as usize % 4];
     let ai_str = if ai_thinking {
@@ -552,11 +577,11 @@ pub fn render_status_bar(
     let log_entry = last_log.unwrap_or("");
 
     let left = format!(
-        "{} Moves: {}  Time: {}  {}  {}",
-        dice_str, moves, time_str, ai_str, log_entry
+        "Moves: {}  Time: {}  {}  {}",
+        moves, time_str, ai_str, log_entry
     );
     let right = format!(
-        "  Spc=Roll  \u{2191}\u{2193}=Select  Enter=Move  Esc=Pause  {}",
+        "  \u{2191}\u{2193}=Select  Enter=Move  Esc=Pause  {}",
         log_hint
     );
 
@@ -628,7 +653,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         true,
         game_state.current_player == Player::Player1,
         app.stats.captures[0],
-        PanelDice::Hidden,
+        compute_panel_dice(app, Player::Player1),
     );
     render_player_panel(
         f,
@@ -637,7 +662,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         false,
         game_state.current_player == Player::Player2,
         app.stats.captures[1],
-        PanelDice::Hidden,
+        compute_panel_dice(app, Player::Player2),
     );
 
     // Column headers centered above each board column
@@ -698,7 +723,6 @@ pub fn render_game(f: &mut Frame, app: &App) {
     render_status_bar(
         f,
         status_area,
-        app.dice_roll,
         app.stats.moves,
         elapsed,
         app.log.last().map(|s| s.as_str()),
