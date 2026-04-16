@@ -446,6 +446,10 @@ impl App {
         }
 
         self.game_state = Some(result.new_state.clone());
+        // Save AI's roll before clearing, so the AI panel can show it dimmed.
+        if mv.piece.player == ur_core::player::Player::Player2 {
+            self.last_opponent_roll = self.dice_roll;
+        }
         self.dice_roll = None;
         self.legal_moves.clear();
         self.cursor_path_pos = 0;
@@ -488,6 +492,19 @@ impl App {
 
         if result.new_state.current_player == ur_core::player::Player::Player2 {
             self.start_ai_turn();
+        } else {
+            // Human's turn — schedule auto-roll.
+            self.pending_roll = true;
+            self.rosette_reroll = result.landed_on_rosette;
+            // Rosette re-rolls skip the delay; normal transitions get 300 ms.
+            self.roll_after = if result.landed_on_rosette {
+                None
+            } else {
+                Some(
+                    std::time::Instant::now()
+                        + std::time::Duration::from_millis(AUTO_ROLL_DELAY_MS),
+                )
+            };
         }
     }
 
@@ -902,6 +919,67 @@ mod tests {
         assert!(
             app.roll_after.is_some(),
             "roll_after must be set for the 300ms delay"
+        );
+    }
+
+    #[test]
+    fn test_apply_move_sets_last_opponent_roll_from_ai_move() {
+        use ur_core::{
+            dice::Dice,
+            player::Player,
+            state::{GameRules, GameState, Move, PieceLocation},
+        };
+        let rules = GameRules::finkel();
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        // Player2 (AI) enters a piece from Unplayed with roll=1 → lands at path[0].
+        let mut gs = GameState::new(&rules);
+        gs.current_player = Player::Player2;
+        app.game_state = Some(gs.clone());
+        app.dice_roll = Some(Dice(1)); // pretend AI rolled 1
+                                       // Use legal_moves to get a valid move for roll=1 (enter from Unplayed).
+        let moves = gs.legal_moves(Dice(1));
+        let mv = moves
+            .into_iter()
+            .next()
+            .expect("should have at least one legal move");
+        app.apply_move(mv);
+        assert_eq!(
+            app.last_opponent_roll,
+            Some(Dice(1)),
+            "last_opponent_roll must be saved before dice_roll is cleared"
+        );
+    }
+
+    #[test]
+    fn test_apply_move_sets_pending_roll_after_human_move() {
+        use ur_core::{
+            dice::Dice,
+            player::Player,
+            state::{GameRules, GameState},
+        };
+        let rules = GameRules::finkel();
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        // Player1 enters a piece from Unplayed with roll=1 → non-rosette landing.
+        let gs = GameState::new(&rules);
+        let path = rules.path_for(Player::Player1);
+        let to_sq = path.get(0).unwrap(); // path[0]=(2,3) — not a rosette
+        assert!(!rules.board_shape.is_rosette(to_sq));
+        let moves = gs.legal_moves(Dice(1));
+        let mv = moves
+            .into_iter()
+            .next()
+            .expect("should have at least one legal move");
+        app.game_state = Some(gs);
+        app.dice_roll = Some(Dice(1));
+        // After this move Player2 (AI) should get the turn → start_ai_turn fires.
+        // Verify that pending_roll is NOT set (AI uses start_ai_turn, not pending_roll).
+        app.apply_move(mv);
+        // AI turn: pending_roll should be false.
+        assert!(
+            !app.pending_roll,
+            "pending_roll must not be set when it's the AI's turn"
         );
     }
 }
