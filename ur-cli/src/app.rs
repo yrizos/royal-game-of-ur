@@ -177,6 +177,9 @@ impl App {
         self.ai_thinking = false;
         self.ai_receiver = None;
         self.ai_spinner_frame = 0;
+        self.last_opponent_roll = None;
+        self.rosette_reroll = false;
+        self.forfeit_after = None;
         self.screen = Screen::Game;
 
         if first_player == ur_core::player::Player::Player2 {
