@@ -26,6 +26,7 @@ const COLOR_TARGET_BG: Color = Color::Rgb(40, 20, 60);
 
 /// Describes what the dice widget inside a player panel should show.
 #[derive(Debug, Clone, Copy)]
+#[allow(dead_code)] // variants are constructed in compute_panel_dice (Task 5)
 pub enum PanelDice {
     /// Nothing to show (panel is inactive and no prior roll to display).
     Hidden,
@@ -47,7 +48,7 @@ pub enum PanelDice {
 /// `value` filled dice are drawn in `color`; the rest in `DarkGray`.
 fn dice_pips_line(value: u8, color: Color) -> Line<'static> {
     const FILLED: &str = "\u{25b2}"; // ▲
-    const EMPTY:  &str = "\u{25b3}"; // △
+    const EMPTY: &str = "\u{25b3}"; // △
     let mut spans = vec![Span::raw("  ")];
     for i in 0..4u8 {
         let (sym, c) = if i < value {
@@ -464,7 +465,9 @@ pub fn render_player_panel(
             text.push(dice_pips_line(roll.value(), color));
             text.push(Line::from(Span::styled(
                 format!("  = {}", roll.value()),
-                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::White)
+                    .add_modifier(Modifier::BOLD),
             )));
             text.push(Line::from(Span::styled(
                 "  pick a move",
