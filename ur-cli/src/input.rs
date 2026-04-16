@@ -128,4 +128,112 @@ mod tests {
         let action = map_key(key(KeyCode::Char('z')), &crate::app::Screen::Game);
         assert_eq!(action, None);
     }
+
+    #[test]
+    fn test_escape_maps_to_quit_prompt_in_game() {
+        let action = map_key(key(KeyCode::Esc), &crate::app::Screen::Game);
+        assert_eq!(action, Some(Action::QuitPrompt));
+    }
+
+    #[test]
+    fn test_j_maps_to_select_next_in_game() {
+        let action = map_key(key(KeyCode::Char('j')), &crate::app::Screen::Game);
+        assert_eq!(action, Some(Action::SelectNext));
+    }
+
+    #[test]
+    fn test_right_maps_to_select_next_in_game() {
+        let action = map_key(key(KeyCode::Right), &crate::app::Screen::Game);
+        assert_eq!(action, Some(Action::SelectNext));
+    }
+
+    #[test]
+    fn test_k_maps_to_select_prev_in_game() {
+        let action = map_key(key(KeyCode::Char('k')), &crate::app::Screen::Game);
+        assert_eq!(action, Some(Action::SelectPrev));
+    }
+
+    #[test]
+    fn test_h_maps_to_select_prev_in_game() {
+        let action = map_key(key(KeyCode::Char('h')), &crate::app::Screen::Game);
+        assert_eq!(action, Some(Action::SelectPrev));
+    }
+
+    #[test]
+    fn test_j_maps_to_menu_down_on_difficulty() {
+        let action = map_key(
+            key(KeyCode::Char('j')),
+            &crate::app::Screen::DifficultySelect { selected: 0 },
+        );
+        assert_eq!(action, Some(Action::MenuDown));
+    }
+
+    #[test]
+    fn test_k_maps_to_menu_up_on_difficulty() {
+        let action = map_key(
+            key(KeyCode::Char('k')),
+            &crate::app::Screen::DifficultySelect { selected: 1 },
+        );
+        assert_eq!(action, Some(Action::MenuUp));
+    }
+
+    #[test]
+    fn test_esc_maps_to_back_on_help() {
+        let action = map_key(
+            key(KeyCode::Esc),
+            &crate::app::Screen::Help { from_game: false },
+        );
+        assert_eq!(action, Some(Action::Back));
+    }
+
+    #[test]
+    fn test_up_down_scroll_on_help() {
+        let screen = crate::app::Screen::Help { from_game: true };
+        assert_eq!(
+            map_key(key(KeyCode::Up), &screen),
+            Some(Action::ScrollUp)
+        );
+        assert_eq!(
+            map_key(key(KeyCode::Down), &screen),
+            Some(Action::ScrollDown)
+        );
+    }
+
+    #[test]
+    fn test_uppercase_q_quits_on_gameover() {
+        let action = map_key(key(KeyCode::Char('Q')), &crate::app::Screen::GameOver);
+        assert_eq!(action, Some(Action::Quit));
+    }
+
+    #[test]
+    fn test_uppercase_n_new_game_on_gameover() {
+        let action = map_key(key(KeyCode::Char('N')), &crate::app::Screen::GameOver);
+        assert_eq!(action, Some(Action::NewGame));
+    }
+
+    #[test]
+    fn test_q_quits_on_title() {
+        let action = map_key(key(KeyCode::Char('q')), &crate::app::Screen::Title);
+        assert_eq!(action, Some(Action::Quit));
+    }
+
+    #[test]
+    fn test_space_confirms_on_diceoff() {
+        let action = map_key(
+            key(KeyCode::Char(' ')),
+            &crate::app::Screen::DiceOff {
+                state: crate::app::DiceOffState {
+                    p1_frames: 0,
+                    p2_frames: 0,
+                    p1_final: ur_core::dice::Dice(2),
+                    p2_final: ur_core::dice::Dice(1),
+                    p1_display: ur_core::dice::Dice(0),
+                    p2_display: ur_core::dice::Dice(0),
+                    winner: None,
+                    acknowledged: false,
+                },
+            },
+        );
+        assert_eq!(action, Some(Action::Confirm));
+    }
 }

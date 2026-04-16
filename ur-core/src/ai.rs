@@ -214,4 +214,52 @@ mod tests {
         let chosen = choose_move(&state, roll, 0);
         assert!(moves.contains(&chosen));
     }
+
+    #[test]
+    fn test_ai_prefers_bear_off_over_any_other_move() {
+        let rules = GameRules::finkel();
+        let mut s = GameState::new(&rules);
+        // Player1 has 6 scored and 1 piece at the last square (can bear off with roll=1).
+        // Also has another piece further back that could move forward.
+        s.scored[Player::Player1.index()] = 6;
+        let last_sq = rules.path_for(Player::Player1).get(13).unwrap();
+        let mid_sq = rules.path_for(Player::Player1).get(4).unwrap(); // (1,0)
+        s.board.set(last_sq, Some(Piece::new(Player::Player1, 0)));
+        s.board.set(mid_sq, Some(Piece::new(Player::Player1, 1)));
+        s.unplayed[Player::Player1.index()] = 0;
+        let roll = Dice(1);
+        let chosen = choose_move(&s, roll, 1);
+        assert_eq!(
+            chosen.to,
+            PieceLocation::Scored,
+            "AI should always choose the winning bear-off move"
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_choose_move_panics_when_no_legal_moves() {
+        let rules = GameRules::finkel();
+        let state = GameState::new(&rules);
+        // Roll 0 always yields no legal moves
+        choose_move(&state, Dice(0), 1);
+    }
+
+    #[test]
+    fn test_evaluate_favours_more_scored_pieces() {
+        let rules = GameRules::finkel();
+        // Build two states from Player1's perspective: more scored = higher score.
+        let mut s_ahead = GameState::new(&rules);
+        s_ahead.scored[Player::Player1.index()] = 3;
+        s_ahead.scored[Player::Player2.index()] = 0;
+
+        let mut s_behind = GameState::new(&rules);
+        s_behind.scored[Player::Player1.index()] = 0;
+        s_behind.scored[Player::Player2.index()] = 3;
+
+        assert!(
+            evaluate(&s_ahead) > evaluate(&s_behind),
+            "more scored pieces for the current player should give a higher evaluation"
+        );
+    }
 }

@@ -410,24 +410,21 @@ impl GameState {
 mod tests {
     use super::*;
 
-    // ── Helpers for constructing test states ─────────────────────────────────
-
-    /// Places `piece` at the given path index for the current player and returns
-    /// a cloned state with that change applied. Does NOT adjust unplayed counts.
-    #[allow(dead_code)]
-    fn place_at_path_idx(
-        state: &GameState,
-        player: Player,
-        piece_idx: u8,
-        path_idx: usize,
-    ) -> GameState {
-        let sq = state.rules.path_for(player).get(path_idx).unwrap();
-        let mut s = state.clone();
-        s.board.set(sq, Some(Piece::new(player, piece_idx)));
-        s
-    }
-
     // ── Legal move generation ────────────────────────────────────────────────
+
+    #[test]
+    fn test_game_state_new_initial_conditions() {
+        let rules = GameRules::finkel();
+        let state = GameState::new(&rules);
+        assert_eq!(state.unplayed[Player::Player1.index()], 7);
+        assert_eq!(state.unplayed[Player::Player2.index()], 7);
+        assert_eq!(state.scored[Player::Player1.index()], 0);
+        assert_eq!(state.scored[Player::Player2.index()], 0);
+        assert_eq!(state.current_player, Player::Player1);
+        assert_eq!(state.phase, GamePhase::WaitingForRoll);
+        assert!(!state.is_finished());
+        assert_eq!(state.winner(), None);
+    }
 
     #[test]
     fn test_no_legal_moves_roll_0() {
@@ -437,14 +434,43 @@ mod tests {
     }
 
     #[test]
-    fn test_no_legal_moves_all_blocked() {
+    fn test_no_legal_moves_no_pieces() {
         let rules = GameRules::finkel();
-        // All of Player1's entry squares blocked by Player1's own pieces,
-        // and no pieces on board yet — just zero unplayed pieces so nothing can enter.
+        // No unplayed pieces, no pieces on board → no moves for any roll 1-4
         let mut state = GameState::new(&rules);
         state.unplayed[Player::Player1.index()] = 0;
-        // No pieces on board, no unplayed → no moves for any roll
-        assert!(state.legal_moves(Dice(2)).is_empty());
+        for roll in 1u8..=4 {
+            assert!(
+                state.legal_moves(Dice(roll)).is_empty(),
+                "expected no moves for roll {roll}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_no_legal_moves_all_destinations_blocked() {
+        let rules = GameRules::finkel();
+        // Player1 piece at path[3]=(2,0). All reachable targets (path[4..7]) occupied by
+        // friendly pieces. Roll 1 → path[4]=(1,0) blocked, roll 2 → path[5]=(1,1) blocked,
+        // roll 3 → path[6]=(1,2) blocked, roll 4 → path[7]=(1,3) blocked.
+        let mut s = GameState::new(&rules);
+        let path = rules.path_for(Player::Player1);
+        s.board.set(path.get(3).unwrap(), Some(Piece::new(Player::Player1, 0)));
+        s.board.set(path.get(4).unwrap(), Some(Piece::new(Player::Player1, 1)));
+        s.board.set(path.get(5).unwrap(), Some(Piece::new(Player::Player1, 2)));
+        s.board.set(path.get(6).unwrap(), Some(Piece::new(Player::Player1, 3)));
+        s.board.set(path.get(7).unwrap(), Some(Piece::new(Player::Player1, 4)));
+        s.unplayed[Player::Player1.index()] = 0;
+        // Piece at path[3] cannot move anywhere 1-4 steps ahead (all friendly)
+        for roll in 1u8..=4 {
+            let moves = s.legal_moves(Dice(roll));
+            assert!(
+                moves
+                    .iter()
+                    .all(|m| m.from != PieceLocation::OnBoard(path.get(3).unwrap())),
+                "piece at path[3] should have no move for roll {roll} — all targets friendly"
+            );
+        }
     }
 
     #[test]
@@ -474,11 +500,28 @@ mod tests {
         // Now roll=1 would land there — must be blocked
         let moves = s.legal_moves(Dice(1));
         assert!(
+            !moves
+                .iter()
+                .any(|m| m.from == PieceLocation::Unplayed && m.to == PieceLocation::OnBoard(entry_sq)),
+            "should not be able to enter when entry square is friendly-occupied"
+        );
+    }
+
+    #[test]
+    fn test_can_enter_onto_opponent_non_rosette() {
+        let rules = GameRules::finkel();
+        // Entry square for roll=1 is path[0]=(2,3). Place a Player2 piece there (not a rosette).
+        let entry_sq = rules.path_for(Player::Player1).get(0).unwrap();
+        assert!(!rules.board_shape.is_rosette(entry_sq));
+        let mut s = GameState::new(&rules);
+        s.board.set(entry_sq, Some(Piece::new(Player::Player2, 0)));
+        s.unplayed[Player::Player2.index()] = 6;
+        let moves = s.legal_moves(Dice(1));
+        assert!(
             moves
                 .iter()
-                .all(|m| m.to != PieceLocation::OnBoard(entry_sq)
-                    || m.from != PieceLocation::Unplayed),
-            "should not be able to enter when entry square is friendly-occupied"
+                .any(|m| m.from == PieceLocation::Unplayed && m.to == PieceLocation::OnBoard(entry_sq)),
+            "entering onto an opponent-occupied non-rosette square should be legal (capture on entry)"
         );
     }
 
@@ -811,11 +854,40 @@ mod tests {
         let s = GameState::new(&rules);
         // Roll 0 always produces no legal moves
         assert!(s.legal_moves(Dice(0)).is_empty());
-        // pass_turn hands the turn to the opponent
-        let after_forfeit = s.pass_turn();
+        // forfeit_turn hands the turn to the opponent
+        let after_forfeit = s.forfeit_turn().expect("forfeit_turn should return Some in a live game");
         assert_eq!(after_forfeit.current_player, Player::Player2);
         assert_eq!(after_forfeit.phase, GamePhase::WaitingForRoll);
         // Original state unchanged (immutable)
         assert_eq!(s.current_player, Player::Player1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_apply_move_panics_when_source_is_scored() {
+        let rules = GameRules::finkel();
+        let state = GameState::new(&rules);
+        let illegal = Move {
+            piece: Piece::new(Player::Player1, 0),
+            from: PieceLocation::Scored,
+            to: PieceLocation::OnBoard(Square::new(1, 0)),
+        };
+        state.apply_move(illegal);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_apply_move_panics_when_destination_is_unplayed() {
+        let rules = GameRules::finkel();
+        let mut state = GameState::new(&rules);
+        let src = rules.path_for(Player::Player1).get(4).unwrap();
+        state.board.set(src, Some(Piece::new(Player::Player1, 0)));
+        state.unplayed[Player::Player1.index()] = 6;
+        let illegal = Move {
+            piece: Piece::new(Player::Player1, 0),
+            from: PieceLocation::OnBoard(src),
+            to: PieceLocation::Unplayed,
+        };
+        state.apply_move(illegal);
     }
 }

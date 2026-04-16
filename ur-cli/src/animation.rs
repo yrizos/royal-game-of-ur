@@ -183,4 +183,95 @@ mod tests {
             _ => panic!("wrong variant"),
         }
     }
+
+    #[test]
+    fn test_capture_flash_finishes_at_one() {
+        let mut anim = Animation::CaptureFlash {
+            square: ur_core::board::Square::new(1, 0),
+            frames_remaining: 1,
+        };
+        tick_animation(&mut anim);
+        assert!(matches!(anim, Animation::Done));
+    }
+
+    #[test]
+    fn test_piece_move_advances_step_when_frame_reaches_zero() {
+        let sq0 = ur_core::board::Square::new(1, 0);
+        let sq1 = ur_core::board::Square::new(1, 1);
+        let mut anim = Animation::PieceMove {
+            remaining: vec![sq0, sq1],
+            frames_per_step: 2,
+            frames_this_step: 0, // trigger advance immediately
+            is_player1: true,
+        };
+        tick_animation(&mut anim);
+        match &anim {
+            Animation::PieceMove {
+                remaining,
+                frames_this_step,
+                ..
+            } => {
+                assert_eq!(remaining.len(), 1, "first square should have been consumed");
+                assert_eq!(*remaining, vec![sq1]);
+                assert_eq!(*frames_this_step, 2, "frames_this_step should reset to frames_per_step");
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_piece_move_completes_when_remaining_empty_and_frame_zero() {
+        let mut anim = Animation::PieceMove {
+            remaining: vec![],
+            frames_per_step: 3,
+            frames_this_step: 0,
+            is_player1: true,
+        };
+        tick_animation(&mut anim);
+        assert!(matches!(anim, Animation::Done));
+    }
+
+    #[test]
+    fn test_piece_move_counts_down_frame_before_advancing() {
+        let sq = ur_core::board::Square::new(1, 0);
+        let mut anim = Animation::PieceMove {
+            remaining: vec![sq],
+            frames_per_step: 3,
+            frames_this_step: 3, // still counting down
+            is_player1: false,
+        };
+        tick_animation(&mut anim);
+        match &anim {
+            Animation::PieceMove {
+                remaining,
+                frames_this_step,
+                ..
+            } => {
+                assert_eq!(remaining.len(), 1, "square should not be consumed yet");
+                assert_eq!(*frames_this_step, 2);
+            }
+            _ => panic!("wrong variant"),
+        }
+    }
+
+    #[test]
+    fn test_ai_thinking_increments_frame() {
+        let mut anim = Animation::AiThinking { frame: 2 };
+        tick_animation(&mut anim);
+        assert!(matches!(anim, Animation::AiThinking { frame: 3 }));
+    }
+
+    #[test]
+    fn test_ai_thinking_frame_wraps_at_4() {
+        let mut anim = Animation::AiThinking { frame: 3 };
+        tick_animation(&mut anim);
+        assert!(matches!(anim, Animation::AiThinking { frame: 0 }));
+    }
+
+    #[test]
+    fn test_done_is_noop() {
+        let mut anim = Animation::Done;
+        tick_animation(&mut anim);
+        assert!(matches!(anim, Animation::Done));
+    }
 }
