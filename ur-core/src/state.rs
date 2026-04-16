@@ -455,11 +455,16 @@ mod tests {
         // roll 3 → path[6]=(1,2) blocked, roll 4 → path[7]=(1,3) blocked.
         let mut s = GameState::new(&rules);
         let path = rules.path_for(Player::Player1);
-        s.board.set(path.get(3).unwrap(), Some(Piece::new(Player::Player1, 0)));
-        s.board.set(path.get(4).unwrap(), Some(Piece::new(Player::Player1, 1)));
-        s.board.set(path.get(5).unwrap(), Some(Piece::new(Player::Player1, 2)));
-        s.board.set(path.get(6).unwrap(), Some(Piece::new(Player::Player1, 3)));
-        s.board.set(path.get(7).unwrap(), Some(Piece::new(Player::Player1, 4)));
+        s.board
+            .set(path.get(3).unwrap(), Some(Piece::new(Player::Player1, 0)));
+        s.board
+            .set(path.get(4).unwrap(), Some(Piece::new(Player::Player1, 1)));
+        s.board
+            .set(path.get(5).unwrap(), Some(Piece::new(Player::Player1, 2)));
+        s.board
+            .set(path.get(6).unwrap(), Some(Piece::new(Player::Player1, 3)));
+        s.board
+            .set(path.get(7).unwrap(), Some(Piece::new(Player::Player1, 4)));
         s.unplayed[Player::Player1.index()] = 0;
         // Piece at path[3] cannot move anywhere 1-4 steps ahead (all friendly)
         for roll in 1u8..=4 {
@@ -502,7 +507,8 @@ mod tests {
         assert!(
             !moves
                 .iter()
-                .any(|m| m.from == PieceLocation::Unplayed && m.to == PieceLocation::OnBoard(entry_sq)),
+                .any(|m| m.from == PieceLocation::Unplayed
+                    && m.to == PieceLocation::OnBoard(entry_sq)),
             "should not be able to enter when entry square is friendly-occupied"
         );
     }
@@ -855,7 +861,9 @@ mod tests {
         // Roll 0 always produces no legal moves
         assert!(s.legal_moves(Dice(0)).is_empty());
         // forfeit_turn hands the turn to the opponent
-        let after_forfeit = s.forfeit_turn().expect("forfeit_turn should return Some in a live game");
+        let after_forfeit = s
+            .forfeit_turn()
+            .expect("forfeit_turn should return Some in a live game");
         assert_eq!(after_forfeit.current_player, Player::Player2);
         assert_eq!(after_forfeit.phase, GamePhase::WaitingForRoll);
         // Original state unchanged (immutable)

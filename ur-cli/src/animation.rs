@@ -213,7 +213,10 @@ mod tests {
             } => {
                 assert_eq!(remaining.len(), 1, "first square should have been consumed");
                 assert_eq!(*remaining, vec![sq1]);
-                assert_eq!(*frames_this_step, 2, "frames_this_step should reset to frames_per_step");
+                assert_eq!(
+                    *frames_this_step, 2,
+                    "frames_this_step should reset to frames_per_step"
+                );
             }
             _ => panic!("wrong variant"),
         }

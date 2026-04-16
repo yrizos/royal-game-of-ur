@@ -72,7 +72,9 @@ fn test_1000_random_games_all_complete_with_valid_winner() {
                     .board_shape
                     .valid_squares()
                     .iter()
-                    .filter(|&&sq| matches!(final_state.board.get(sq), Some(p) if p.player == player))
+                    .filter(
+                        |&&sq| matches!(final_state.board.get(sq), Some(p) if p.player == player),
+                    )
                     .count() as u8;
                 let total = on_board
                     + final_state.unplayed[player.index()]

@@ -527,11 +527,11 @@ fn compute_panel_dice(app: &crate::app::App, player: Player) -> PanelDice {
             return PanelDice::Pending;
         }
         if let Some(roll) = app.dice_roll {
-            if app.forfeit_after.is_some() {
-                return PanelDice::NoMoves(roll);
-            }
             if let Some(crate::animation::Animation::DiceRoll { display, .. }) = &app.animation {
                 return PanelDice::Animating(*display);
+            }
+            if app.forfeit_after.is_some() {
+                return PanelDice::NoMoves(roll);
             }
             return PanelDice::Result(roll);
         }
@@ -757,4 +757,133 @@ fn render_log_overlay(f: &mut Frame, area: Rect, log: &[String]) {
     let list = List::new(items).block(block);
     f.render_widget(ratatui::widgets::Clear, overlay);
     f.render_widget(list, overlay);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::animation::Animation;
+    use crate::app::App;
+    use ur_core::{
+        dice::Dice,
+        player::Player,
+        state::{GameRules, GameState},
+    };
+
+    fn make_app_with_game() -> App {
+        let mut app = App::new();
+        app.game_state = Some(GameState::new(&GameRules::finkel()));
+        app
+    }
+
+    /// Branch 1: active player + rosette_reroll => RosettePending
+    #[test]
+    fn test_compute_panel_dice_rosette_pending() {
+        let mut app = make_app_with_game();
+        app.rosette_reroll = true;
+        app.pending_roll = true;
+        let result = compute_panel_dice(&app, Player::Player1);
+        assert!(
+            matches!(result, PanelDice::RosettePending),
+            "expected RosettePending, got {:?}",
+            result
+        );
+    }
+
+    /// Branch 2: active player + pending_roll (no rosette) => Pending
+    #[test]
+    fn test_compute_panel_dice_pending() {
+        let mut app = make_app_with_game();
+        app.pending_roll = true;
+        let result = compute_panel_dice(&app, Player::Player1);
+        assert!(
+            matches!(result, PanelDice::Pending),
+            "expected Pending, got {:?}",
+            result
+        );
+    }
+
+    /// Branch 3: active player + DiceRoll animation => Animating
+    #[test]
+    fn test_compute_panel_dice_animating() {
+        let mut app = make_app_with_game();
+        app.dice_roll = Some(Dice(3));
+        app.animation = Some(Animation::DiceRoll {
+            frames_remaining: 5,
+            final_value: Dice(3),
+            display: Dice(2),
+        });
+        let result = compute_panel_dice(&app, Player::Player1);
+        assert!(
+            matches!(result, PanelDice::Animating(Dice(2))),
+            "expected Animating(Dice(2)), got {:?}",
+            result
+        );
+    }
+
+    /// Branch 4: active player + forfeit_after set + dice_roll set => NoMoves
+    #[test]
+    fn test_compute_panel_dice_no_moves() {
+        let mut app = make_app_with_game();
+        app.dice_roll = Some(Dice(1));
+        app.forfeit_after = Some(std::time::Instant::now());
+        let result = compute_panel_dice(&app, Player::Player1);
+        assert!(
+            matches!(result, PanelDice::NoMoves(Dice(1))),
+            "expected NoMoves(Dice(1)), got {:?}",
+            result
+        );
+    }
+
+    /// Branch 5: active player + dice_roll set, no animation, no forfeit => Result
+    #[test]
+    fn test_compute_panel_dice_result() {
+        let mut app = make_app_with_game();
+        app.dice_roll = Some(Dice(2));
+        let result = compute_panel_dice(&app, Player::Player1);
+        assert!(
+            matches!(result, PanelDice::Result(Dice(2))),
+            "expected Result(Dice(2)), got {:?}",
+            result
+        );
+    }
+
+    /// Branch 6: inactive player + last_opponent_roll set => LastRoll
+    #[test]
+    fn test_compute_panel_dice_last_roll() {
+        let mut app = make_app_with_game();
+        app.last_opponent_roll = Some(Dice(4));
+        // Player2 is inactive (current_player is Player1 in fresh GameState)
+        let result = compute_panel_dice(&app, Player::Player2);
+        assert!(
+            matches!(result, PanelDice::LastRoll(Dice(4))),
+            "expected LastRoll(Dice(4)), got {:?}",
+            result
+        );
+    }
+
+    /// Branch 7: inactive player with no last roll => Hidden
+    #[test]
+    fn test_compute_panel_dice_hidden_inactive() {
+        let app = make_app_with_game();
+        // Player2 is inactive, no last_opponent_roll
+        let result = compute_panel_dice(&app, Player::Player2);
+        assert!(
+            matches!(result, PanelDice::Hidden),
+            "expected Hidden, got {:?}",
+            result
+        );
+    }
+
+    /// Branch 7 (active path): active player + no roll, no pending => Hidden
+    #[test]
+    fn test_compute_panel_dice_hidden_active_no_roll() {
+        let app = make_app_with_game();
+        let result = compute_panel_dice(&app, Player::Player1);
+        assert!(
+            matches!(result, PanelDice::Hidden),
+            "expected Hidden, got {:?}",
+            result
+        );
+    }
 }
