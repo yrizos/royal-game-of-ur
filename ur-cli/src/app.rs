@@ -927,7 +927,7 @@ mod tests {
         use ur_core::{
             dice::Dice,
             player::Player,
-            state::{GameRules, GameState, Move, PieceLocation},
+            state::{GameRules, GameState},
         };
         let rules = GameRules::finkel();
         let mut app = App::new();
@@ -952,7 +952,7 @@ mod tests {
     }
 
     #[test]
-    fn test_apply_move_sets_pending_roll_after_human_move() {
+    fn test_apply_move_sets_pending_roll_when_ai_move_returns_to_human() {
         use ur_core::{
             dice::Dice,
             player::Player,
