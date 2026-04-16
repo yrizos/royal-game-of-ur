@@ -183,6 +183,11 @@ impl App {
 
         if first_player == ur_core::player::Player::Player2 {
             self.start_ai_turn();
+        } else {
+            self.pending_roll = true;
+            self.roll_after = Some(
+                std::time::Instant::now() + std::time::Duration::from_millis(AUTO_ROLL_DELAY_MS),
+            );
         }
     }
 
@@ -556,6 +561,44 @@ impl App {
         });
     }
 
+    /// Called every tick. If `pending_roll` is set, `roll_after` has elapsed,
+    /// no animation is running, and it is the human player's turn, fires the
+    /// dice-roll animation automatically.
+    #[allow(dead_code)]
+    pub fn tick_auto_roll(&mut self) {
+        if !self.pending_roll {
+            return;
+        }
+        let is_human_turn = self
+            .game_state
+            .as_ref()
+            .map(|gs| gs.current_player == ur_core::player::Player::Player1)
+            .unwrap_or(false);
+        if !is_human_turn {
+            return;
+        }
+        if self.animation.is_some() {
+            return;
+        }
+        let ready = self
+            .roll_after
+            .map(|t| std::time::Instant::now() >= t)
+            .unwrap_or(true);
+        if !ready {
+            return;
+        }
+        self.pending_roll = false;
+        self.rosette_reroll = false;
+        self.roll_after = None;
+        let final_value = Dice::roll(&mut self.rng);
+        self.animation = Some(Animation::DiceRoll {
+            frames_remaining: DICE_ROLL_ANIMATION_FRAMES,
+            final_value,
+            display: Dice(0),
+        });
+        self.dice_roll = Some(final_value);
+    }
+
     /// Polls the AI move channel (non-blocking). If a result is ready, clears
     /// the thinking state and applies the move.
     pub fn poll_ai_move(&mut self) {
@@ -768,5 +811,97 @@ mod tests {
         assert!(app.forfeit_after.is_none());
         assert!(!app.rosette_reroll);
         assert!(app.last_opponent_roll.is_none());
+    }
+
+    #[test]
+    fn test_tick_auto_roll_fires_when_deadline_past() {
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(ur_core::state::GameState::new(
+            &ur_core::state::GameRules::finkel(),
+        ));
+        app.pending_roll = true;
+        // Deadline already in the past
+        app.roll_after = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+        app.tick_auto_roll();
+        assert!(
+            !app.pending_roll,
+            "pending_roll should be cleared after firing"
+        );
+        assert!(app.dice_roll.is_some(), "dice_roll should be set");
+        assert!(
+            matches!(
+                app.animation,
+                Some(crate::animation::Animation::DiceRoll { .. })
+            ),
+            "DiceRoll animation should start"
+        );
+    }
+
+    #[test]
+    fn test_tick_auto_roll_waits_until_deadline() {
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(ur_core::state::GameState::new(
+            &ur_core::state::GameRules::finkel(),
+        ));
+        app.pending_roll = true;
+        app.roll_after = Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
+        app.tick_auto_roll();
+        assert!(
+            app.pending_roll,
+            "pending_roll should still be set before deadline"
+        );
+        assert!(app.animation.is_none());
+    }
+
+    #[test]
+    fn test_tick_auto_roll_blocked_by_active_animation() {
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(ur_core::state::GameState::new(
+            &ur_core::state::GameRules::finkel(),
+        ));
+        app.pending_roll = true;
+        app.roll_after = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+        app.animation = Some(crate::animation::Animation::PieceMove {
+            remaining: vec![],
+            frames_per_step: 3,
+            frames_this_step: 3,
+            is_player1: true,
+        });
+        app.tick_auto_roll();
+        assert!(
+            app.pending_roll,
+            "pending_roll should survive while animation runs"
+        );
+    }
+
+    #[test]
+    fn test_tick_auto_roll_skipped_on_ai_turn() {
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        let mut gs = ur_core::state::GameState::new(&ur_core::state::GameRules::finkel());
+        gs.current_player = ur_core::player::Player::Player2;
+        app.game_state = Some(gs);
+        app.pending_roll = true;
+        app.roll_after = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+        app.tick_auto_roll();
+        assert!(app.pending_roll, "auto-roll should not fire on AI's turn");
+    }
+
+    #[test]
+    fn test_begin_game_sets_pending_roll_for_player1() {
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.begin_game(ur_core::player::Player::Player1);
+        assert!(
+            app.pending_roll,
+            "pending_roll must be set when Player1 goes first"
+        );
+        assert!(
+            app.roll_after.is_some(),
+            "roll_after must be set for the 300ms delay"
+        );
     }
 }
