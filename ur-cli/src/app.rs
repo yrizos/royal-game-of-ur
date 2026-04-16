@@ -638,6 +638,9 @@ impl App {
                         + std::time::Duration::from_millis(AUTO_ROLL_DELAY_MS),
                 );
             }
+        } else {
+            // forfeit_turn returned None — restore state to prevent silent corruption
+            self.game_state = Some(gs);
         }
     }
 
