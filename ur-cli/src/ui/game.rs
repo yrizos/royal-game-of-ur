@@ -387,7 +387,7 @@ impl<'a> Widget for BoardWidget<'a> {
 
 // ── Helper functions ─────────────────────────────────────────────────────────
 
-/// Renders a player status panel showing captures and turn indicator.
+/// Renders a player status panel showing captures, turn indicator, and dice widget.
 pub fn render_player_panel(
     f: &mut Frame,
     area: Rect,
@@ -395,6 +395,7 @@ pub fn render_player_panel(
     is_human: bool,
     is_current: bool,
     captures: u32,
+    panel_dice: PanelDice,
 ) {
     let color = if player == Player::Player1 {
         COLOR_P1
@@ -428,7 +429,7 @@ pub fn render_player_panel(
         ""
     };
 
-    let text = vec![
+    let mut text = vec![
         Line::from(Span::styled(
             format!("Captures: {}", captures),
             Style::default().fg(Color::Gray),
@@ -439,6 +440,69 @@ pub fn render_player_panel(
             Style::default().fg(color).add_modifier(Modifier::BOLD),
         )),
     ];
+
+    // Dice widget
+    match panel_dice {
+        PanelDice::Hidden => {}
+        PanelDice::Pending => {
+            text.push(Line::from(""));
+            text.push(Line::from(Span::styled(
+                "  rolling...",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        PanelDice::Animating(display) => {
+            text.push(Line::from(""));
+            text.push(dice_pips_line(display.value(), color));
+            text.push(Line::from(Span::styled(
+                "  = ?",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        PanelDice::Result(roll) => {
+            text.push(Line::from(""));
+            text.push(dice_pips_line(roll.value(), color));
+            text.push(Line::from(Span::styled(
+                format!("  = {}", roll.value()),
+                Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+            )));
+            text.push(Line::from(Span::styled(
+                "  pick a move",
+                Style::default().fg(Color::Green),
+            )));
+        }
+        PanelDice::NoMoves(roll) => {
+            text.push(Line::from(""));
+            text.push(dice_pips_line(roll.value(), Color::Red));
+            text.push(Line::from(Span::styled(
+                format!("  = {}  no moves", roll.value()),
+                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            )));
+            text.push(Line::from(Span::styled(
+                "  passing turn...",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        PanelDice::LastRoll(roll) => {
+            text.push(Line::from(""));
+            text.push(dice_pips_line(roll.value(), Color::DarkGray));
+            text.push(Line::from(Span::styled(
+                format!("  = {} (last roll)", roll.value()),
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+        PanelDice::RosettePending => {
+            text.push(Line::from(""));
+            text.push(Line::from(Span::styled(
+                "  \u{2736} rosette bonus!",
+                Style::default().fg(Color::Yellow),
+            )));
+            text.push(Line::from(Span::styled(
+                "  rolling again...",
+                Style::default().fg(Color::DarkGray),
+            )));
+        }
+    }
 
     let inner = block.inner(area);
     f.render_widget(block, area);
@@ -561,6 +625,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         true,
         game_state.current_player == Player::Player1,
         app.stats.captures[0],
+        PanelDice::Hidden,
     );
     render_player_panel(
         f,
@@ -569,6 +634,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         false,
         game_state.current_player == Player::Player2,
         app.stats.captures[1],
+        PanelDice::Hidden,
     );
 
     // Column headers centered above each board column
