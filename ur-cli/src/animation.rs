@@ -135,6 +135,10 @@ pub fn tick(app: &mut App) {
         app.ai_spinner_frame = (app.ai_spinner_frame + 1) % 4;
         app.poll_ai_move();
     }
+
+    // Auto-roll and forfeit delay
+    app.tick_auto_roll();
+    app.tick_forfeit_delay();
 }
 
 #[cfg(test)]
@@ -276,5 +280,51 @@ mod tests {
         let mut anim = Animation::Done;
         tick_animation(&mut anim);
         assert!(matches!(anim, Animation::Done));
+    }
+
+    #[test]
+    fn test_tick_calls_tick_auto_roll() {
+        use crate::app::{App, Screen};
+        use ur_core::state::{GameRules, GameState};
+
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(GameState::new(&GameRules::finkel()));
+        // Set pending_roll with an already-elapsed deadline
+        app.pending_roll = true;
+        app.roll_after = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+
+        tick(&mut app);
+
+        assert!(
+            matches!(app.animation, Some(Animation::DiceRoll { .. })),
+            "tick() must fire auto-roll when pending_roll is set and deadline is past"
+        );
+    }
+
+    #[test]
+    fn test_tick_calls_tick_forfeit_delay() {
+        use crate::app::{App, Screen};
+        use ur_core::{
+            dice::Dice,
+            state::{GameRules, GameState},
+        };
+
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(GameState::new(&GameRules::finkel()));
+        app.dice_roll = Some(Dice(0));
+        app.forfeit_after = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+
+        tick(&mut app);
+
+        assert!(
+            app.forfeit_after.is_none(),
+            "tick() must fire forfeit when deadline is past"
+        );
+        assert!(
+            app.dice_roll.is_none(),
+            "dice_roll must be cleared after forfeit"
+        );
     }
 }

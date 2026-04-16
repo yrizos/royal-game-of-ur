@@ -53,10 +53,8 @@ const DICE_OFF_ANIMATION_FRAMES: u32 = 18;
 const DICE_ROLL_ANIMATION_FRAMES: u32 = 18;
 
 /// Delay in ms before the dice roll animation fires automatically.
-#[allow(dead_code)]
 const AUTO_ROLL_DELAY_MS: u64 = 300;
 /// How long (ms) to display a no-moves result before forfeiting.
-#[allow(dead_code)]
 const FORFEIT_DISPLAY_MS: u64 = 1000;
 
 /// Difficulty level maps to expectiminimax search depth.
@@ -574,7 +572,6 @@ impl App {
     /// Called every tick. If `pending_roll` is set, `roll_after` has elapsed,
     /// no animation is running, and it is the human player's turn, fires the
     /// dice-roll animation automatically.
-    #[allow(dead_code)]
     pub fn tick_auto_roll(&mut self) {
         if !self.pending_roll {
             return;
@@ -611,7 +608,6 @@ impl App {
 
     /// Called every tick. If `forfeit_after` has elapsed, forfeits the current
     /// player's turn and starts the next player's turn.
-    #[allow(dead_code)]
     pub fn tick_forfeit_delay(&mut self) {
         let deadline = match self.forfeit_after {
             Some(t) => t,
