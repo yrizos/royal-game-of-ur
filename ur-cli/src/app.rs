@@ -298,6 +298,13 @@ impl App {
         if self.animation.is_some() {
             return;
         }
+        // dice_roll is set as soon as a roll starts and cleared only when the
+        // move is applied (or the turn is forfeited).  Checking it here prevents
+        // the player from re-rolling after the animation finishes but before they
+        // have made a move — the game-state phase stays WaitingForRoll throughout.
+        if self.dice_roll.is_some() {
+            return;
+        }
 
         let final_value = Dice::roll(&mut self.rng);
         self.animation = Some(Animation::DiceRoll {
@@ -629,6 +636,7 @@ mod tests {
     #[test]
     fn test_roll_dice_starts_dice_animation() {
         let mut app = App::new();
+        app.screen = Screen::Game;
         app.game_state = Some(ur_core::state::GameState::new(
             &ur_core::state::GameRules::finkel(),
         ));
@@ -637,6 +645,71 @@ mod tests {
             app.animation,
             Some(crate::animation::Animation::DiceRoll { .. })
         ));
+    }
+
+    #[test]
+    fn test_roll_dice_ignored_when_dice_already_rolled() {
+        // Regression: player must not be able to re-roll after the dice animation
+        // finishes but before they have made a move.  At that point animation is
+        // None and game-state phase is still WaitingForRoll, so without the
+        // dice_roll guard handle_roll_dice would allow a second roll.
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(ur_core::state::GameState::new(
+            &ur_core::state::GameRules::finkel(),
+        ));
+        // Simulate: roll has happened, animation finished, legal moves waiting.
+        app.dice_roll = Some(ur_core::dice::Dice(3));
+        app.animation = None;
+        app.handle_roll_dice();
+        // dice_roll should be unchanged — no new animation started.
+        assert_eq!(app.dice_roll, Some(ur_core::dice::Dice(3)));
+        assert!(app.animation.is_none());
+    }
+
+    #[test]
+    fn test_roll_dice_ignored_when_animation_active() {
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(ur_core::state::GameState::new(
+            &ur_core::state::GameRules::finkel(),
+        ));
+        app.animation = Some(crate::animation::Animation::Done);
+        app.handle_roll_dice();
+        // Still Done — the new dice animation was not started
+        assert!(matches!(app.animation, Some(crate::animation::Animation::Done)));
+    }
+
+    #[test]
+    fn test_handle_back_from_difficulty_goes_to_title() {
+        let mut app = App::new();
+        app.screen = Screen::DifficultySelect { selected: 1 };
+        app.handle_back();
+        assert!(matches!(app.screen, Screen::Title));
+    }
+
+    #[test]
+    fn test_handle_back_from_pause_goes_to_game() {
+        let mut app = App::new();
+        app.screen = Screen::PauseMenu { selected: 0 };
+        app.handle_back();
+        assert!(matches!(app.screen, Screen::Game));
+    }
+
+    #[test]
+    fn test_menu_up_clamps_at_zero() {
+        let mut app = App::new();
+        app.screen = Screen::DifficultySelect { selected: 0 };
+        app.handle_menu_up();
+        assert!(matches!(app.screen, Screen::DifficultySelect { selected: 0 }));
+    }
+
+    #[test]
+    fn test_menu_down_clamps_at_max() {
+        let mut app = App::new();
+        app.screen = Screen::DifficultySelect { selected: 2 };
+        app.handle_menu_down();
+        assert!(matches!(app.screen, Screen::DifficultySelect { selected: 2 }));
     }
 
     #[test]
