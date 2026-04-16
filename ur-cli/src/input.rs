@@ -47,10 +47,12 @@ pub fn map_key(key: KeyEvent, screen: &Screen) -> Option<Action> {
             _ => None,
         },
         Screen::Game => match key.code {
-            KeyCode::Up | KeyCode::Char('k') | KeyCode::Left | KeyCode::Char('h') => {
+            // Up/k = forward along path (closer to scoring).
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::SelectNext),
+            // Down/j/h = backward along path.
+            KeyCode::Down | KeyCode::Char('j') | KeyCode::Left | KeyCode::Char('h') => {
                 Some(Action::SelectPrev)
             }
-            KeyCode::Down | KeyCode::Char('j') | KeyCode::Right => Some(Action::SelectNext),
             KeyCode::Enter => Some(Action::ConfirmMove),
             KeyCode::Char('l') => Some(Action::ToggleLog),
             KeyCode::Esc => Some(Action::QuitPrompt),
@@ -134,20 +136,20 @@ mod tests {
     }
 
     #[test]
-    fn test_j_maps_to_select_next_in_game() {
-        let action = map_key(key(KeyCode::Char('j')), &crate::app::Screen::Game);
-        assert_eq!(action, Some(Action::SelectNext));
-    }
-
-    #[test]
-    fn test_right_maps_to_select_next_in_game() {
-        let action = map_key(key(KeyCode::Right), &crate::app::Screen::Game);
-        assert_eq!(action, Some(Action::SelectNext));
-    }
-
-    #[test]
-    fn test_k_maps_to_select_prev_in_game() {
+    fn test_k_maps_to_select_next_in_game() {
         let action = map_key(key(KeyCode::Char('k')), &crate::app::Screen::Game);
+        assert_eq!(action, Some(Action::SelectNext));
+    }
+
+    #[test]
+    fn test_up_maps_to_select_next_in_game() {
+        let action = map_key(key(KeyCode::Up), &crate::app::Screen::Game);
+        assert_eq!(action, Some(Action::SelectNext));
+    }
+
+    #[test]
+    fn test_j_maps_to_select_prev_in_game() {
+        let action = map_key(key(KeyCode::Char('j')), &crate::app::Screen::Game);
         assert_eq!(action, Some(Action::SelectPrev));
     }
 

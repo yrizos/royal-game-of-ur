@@ -45,19 +45,28 @@ pub enum PanelDice {
 
 /// Builds a `Line` showing four tetrahedral dice: ▲ for scored-side-up, △ for blank.
 /// `value` filled dice are drawn in `color`; the rest in `DarkGray`.
-fn dice_pips_line(value: u8, color: Color) -> Line<'static> {
+/// When `bold` is true the filled dice are rendered with the BOLD modifier.
+fn dice_pips_line(value: u8, color: Color, bold: bool) -> Line<'static> {
     const FILLED: &str = "\u{25b2}"; // ▲
     const EMPTY: &str = "\u{25b3}"; // △
     let mut spans = vec![Span::raw("  ")];
     for i in 0..4u8 {
-        let (sym, c) = if i < value {
-            (FILLED, color)
+        let (sym, c, modifier) = if i < value {
+            let m = if bold {
+                Modifier::BOLD
+            } else {
+                Modifier::empty()
+            };
+            (FILLED, color, m)
         } else {
-            (EMPTY, Color::DarkGray)
+            (EMPTY, Color::DarkGray, Modifier::empty())
         };
-        spans.push(Span::styled(sym.to_string(), Style::default().fg(c)));
+        spans.push(Span::styled(
+            sym.to_string(),
+            Style::default().fg(c).add_modifier(modifier),
+        ));
         if i < 3 {
-            spans.push(Span::raw("  "));
+            spans.push(Span::raw("   "));
         }
     }
     Line::from(spans)
@@ -388,6 +397,7 @@ impl<'a> Widget for BoardWidget<'a> {
 // ── Helper functions ─────────────────────────────────────────────────────────
 
 /// Renders a player status panel showing captures, turn indicator, and dice widget.
+#[allow(clippy::too_many_arguments)]
 pub fn render_player_panel(
     f: &mut Frame,
     area: Rect,
@@ -396,6 +406,7 @@ pub fn render_player_panel(
     is_current: bool,
     captures: u32,
     panel_dice: PanelDice,
+    event_msg: Option<&str>,
 ) {
     let color = if player == Player::Player1 {
         COLOR_P1
@@ -453,7 +464,7 @@ pub fn render_player_panel(
         }
         PanelDice::Animating(display) => {
             text.push(Line::from(""));
-            text.push(dice_pips_line(display.value(), color));
+            text.push(dice_pips_line(display.value(), color, false));
             text.push(Line::from(Span::styled(
                 "  = ?",
                 Style::default().fg(Color::DarkGray),
@@ -461,21 +472,25 @@ pub fn render_player_panel(
         }
         PanelDice::Result(roll) => {
             text.push(Line::from(""));
-            text.push(dice_pips_line(roll.value(), color));
+            text.push(dice_pips_line(roll.value(), color, true));
             text.push(Line::from(Span::styled(
                 format!("  = {}", roll.value()),
                 Style::default()
                     .fg(Color::White)
                     .add_modifier(Modifier::BOLD),
             )));
-            text.push(Line::from(Span::styled(
-                "  pick a move",
-                Style::default().fg(Color::Green),
-            )));
+            if is_human {
+                text.push(Line::from(Span::styled(
+                    "  \u{25b6} pick a move",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                )));
+            }
         }
         PanelDice::NoMoves(roll) => {
             text.push(Line::from(""));
-            text.push(dice_pips_line(roll.value(), Color::Red));
+            text.push(dice_pips_line(roll.value(), Color::Red, true));
             text.push(Line::from(Span::styled(
                 format!("  = {}  no moves", roll.value()),
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
@@ -487,10 +502,10 @@ pub fn render_player_panel(
         }
         PanelDice::LastRoll(roll) => {
             text.push(Line::from(""));
-            text.push(dice_pips_line(roll.value(), Color::DarkGray));
+            text.push(dice_pips_line(roll.value(), color, false));
             text.push(Line::from(Span::styled(
-                format!("  = {} (last roll)", roll.value()),
-                Style::default().fg(Color::DarkGray),
+                format!("  = {}  last roll", roll.value()),
+                Style::default().fg(color).add_modifier(Modifier::DIM),
             )));
         }
         PanelDice::RosettePending => {
@@ -504,6 +519,17 @@ pub fn render_player_panel(
                 Style::default().fg(Color::DarkGray),
             )));
         }
+    }
+
+    // Event message (last move outcome: capture, rosette, scored)
+    if let Some(msg) = event_msg {
+        text.push(Line::from(""));
+        text.push(Line::from(Span::styled(
+            format!("  {}", msg),
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )));
     }
 
     let inner = block.inner(area);
@@ -537,11 +563,9 @@ fn compute_panel_dice(app: &crate::app::App, player: Player) -> PanelDice {
         }
         PanelDice::Hidden
     } else {
-        // Inactive panel — show AI's last roll dimmed (only in Player2's panel).
-        if player == Player::Player2 {
-            if let Some(roll) = app.last_opponent_roll {
-                return PanelDice::LastRoll(roll);
-            }
+        // Inactive panel — show the player's last roll dimmed.
+        if let Some(roll) = app.last_roll[player.index()] {
+            return PanelDice::LastRoll(roll);
         }
         PanelDice::Hidden
     }
@@ -631,15 +655,12 @@ pub fn render_game(f: &mut Frame, app: &App) {
 
     let rules = &game_state.rules;
 
-    let path = rules.path_for(game_state.current_player);
-    let pool_selected = app.cursor_path_pos == 0;
-    let selected_square = if app.cursor_path_pos == 0 {
-        None
-    } else {
-        path.get(app.cursor_path_pos - 1)
-    };
-
     let cursor_move = app.legal_move_at_cursor();
+    let selected_square = cursor_move.and_then(|mv| match mv.from {
+        PieceLocation::OnBoard(sq) => Some(sq),
+        _ => None,
+    });
+    let pool_selected = cursor_move.is_some_and(|mv| mv.from == PieceLocation::Unplayed);
     let target_square = cursor_move.and_then(|mv| match mv.to {
         PieceLocation::OnBoard(sq) => Some(sq),
         _ => None,
@@ -654,6 +675,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         game_state.current_player == Player::Player1,
         app.stats.captures[0],
         compute_panel_dice(app, Player::Player1),
+        app.last_event[0].as_deref(),
     );
     render_player_panel(
         f,
@@ -663,6 +685,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         game_state.current_player == Player::Player2,
         app.stats.captures[1],
         compute_panel_dice(app, Player::Player2),
+        app.last_event[1].as_deref(),
     );
 
     // Column headers centered above each board column
@@ -848,16 +871,34 @@ mod tests {
         );
     }
 
-    /// Branch 6: inactive player + last_opponent_roll set => LastRoll
+    /// Branch 6: inactive player + last_roll set => LastRoll (works for both players)
     #[test]
     fn test_compute_panel_dice_last_roll() {
         let mut app = make_app_with_game();
-        app.last_opponent_roll = Some(Dice(4));
+        app.last_roll[1] = Some(Dice(4));
         // Player2 is inactive (current_player is Player1 in fresh GameState)
         let result = compute_panel_dice(&app, Player::Player2);
         assert!(
             matches!(result, PanelDice::LastRoll(Dice(4))),
             "expected LastRoll(Dice(4)), got {:?}",
+            result
+        );
+    }
+
+    /// Branch 6b: inactive Player1 panel shows its last roll too
+    #[test]
+    fn test_compute_panel_dice_last_roll_player1_when_inactive() {
+        let rules = GameRules::finkel();
+        let mut gs = GameState::new(&rules);
+        // Make Player2 the current player so Player1 is inactive
+        gs.current_player = Player::Player2;
+        let mut app = App::new();
+        app.game_state = Some(gs);
+        app.last_roll[0] = Some(Dice(2));
+        let result = compute_panel_dice(&app, Player::Player1);
+        assert!(
+            matches!(result, PanelDice::LastRoll(Dice(2))),
+            "expected LastRoll(Dice(2)), got {:?}",
             result
         );
     }

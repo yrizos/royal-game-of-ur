@@ -322,9 +322,8 @@ mod tests {
             app.forfeit_after.is_none(),
             "tick() must fire forfeit when deadline is past"
         );
-        assert!(
-            app.dice_roll.is_none(),
-            "dice_roll must be cleared after forfeit"
-        );
+        // start_ai_turn() immediately sets dice_roll to the AI's roll, so
+        // dice_roll is Some (the AI's roll) — not None — after the forfeit fires.
+        assert!(app.ai_thinking, "AI turn should have started after forfeit");
     }
 }

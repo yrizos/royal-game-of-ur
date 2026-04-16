@@ -3,7 +3,7 @@ use rand::{rngs::SmallRng, SeedableRng};
 use std::time::Instant;
 use ur_core::{
     dice::Dice,
-    state::{GameState, Move, PieceLocation},
+    state::{GameState, Move},
 };
 
 /// Which screen is currently active.
@@ -49,8 +49,8 @@ pub struct DiceOffState {
 /// Number of animation ticks for the dice-off countdown (≈1.5 s at 12 fps).
 const DICE_OFF_ANIMATION_FRAMES: u32 = 18;
 
-/// Number of animation ticks for a dice roll animation (≈0.6 s at 30 fps).
-const DICE_ROLL_ANIMATION_FRAMES: u32 = 18;
+/// Number of animation ticks for a dice roll animation (≈1 s at 30 fps).
+const DICE_ROLL_ANIMATION_FRAMES: u32 = 30;
 
 /// Delay in ms before the dice roll animation fires automatically.
 const AUTO_ROLL_DELAY_MS: u64 = 300;
@@ -78,8 +78,8 @@ pub struct App {
     pub game_state: Option<GameState>,
     pub dice_roll: Option<Dice>,
     pub legal_moves: Vec<Move>,
-    /// Cursor position along the player's path. 0 = pool, 1..=14 = path steps.
-    pub cursor_path_pos: usize,
+    /// Index into `legal_moves` for the currently highlighted move.
+    pub selected_move_idx: usize,
     pub log: Vec<String>,
     pub log_visible: bool,
     pub stats: GameStats,
@@ -99,8 +99,10 @@ pub struct App {
     pub forfeit_after: Option<std::time::Instant>,
     /// True when the auto-roll is a rosette re-roll (skips the normal delay).
     pub rosette_reroll: bool,
-    /// The most recent roll made by the AI, kept for display after apply_move clears dice_roll.
-    pub last_opponent_roll: Option<Dice>,
+    /// Last dice roll per player (index 0 = P1, 1 = P2). Kept for the inactive panel.
+    pub last_roll: [Option<Dice>; 2],
+    /// Last notable event per player (capture / rosette / score). Shown below dice.
+    pub last_event: [Option<String>; 2],
 }
 
 impl App {
@@ -112,7 +114,7 @@ impl App {
             game_state: None,
             dice_roll: None,
             legal_moves: Vec::new(),
-            cursor_path_pos: 0,
+            selected_move_idx: 0,
             log: Vec::new(),
             log_visible: false,
             stats: GameStats::default(),
@@ -127,7 +129,8 @@ impl App {
             roll_after: None,
             forfeit_after: None,
             rosette_reroll: false,
-            last_opponent_roll: None,
+            last_roll: [None, None],
+            last_event: [None, None],
         }
     }
 
@@ -172,12 +175,13 @@ impl App {
         self.log.clear();
         self.dice_roll = None;
         self.legal_moves.clear();
-        self.cursor_path_pos = 0;
+        self.selected_move_idx = 0;
         self.animation = None;
         self.ai_thinking = false;
         self.ai_receiver = None;
         self.ai_spinner_frame = 0;
-        self.last_opponent_roll = None;
+        self.last_roll = [None, None];
+        self.last_event = [None, None];
         self.rosette_reroll = false;
         self.forfeit_after = None;
         self.screen = Screen::Game;
@@ -344,21 +348,22 @@ impl App {
         self.dice_roll = Some(final_value);
     }
 
-    /// Total cursor positions: 0 = pool, 1..=14 = path steps.
-    const PATH_CURSOR_COUNT: usize = 15;
-
-    /// Moves the path cursor to the previous position (wrapping).
+    /// Cycles selection to the previous legal move (no-op if no legal moves).
     pub fn handle_select_prev(&mut self) {
-        if self.cursor_path_pos == 0 {
-            self.cursor_path_pos = Self::PATH_CURSOR_COUNT - 1;
-        } else {
-            self.cursor_path_pos -= 1;
+        let n = self.legal_moves.len();
+        if n == 0 {
+            return;
         }
+        self.selected_move_idx = (self.selected_move_idx + n - 1) % n;
     }
 
-    /// Moves the path cursor to the next position (wrapping).
+    /// Cycles selection to the next legal move (no-op if no legal moves).
     pub fn handle_select_next(&mut self) {
-        self.cursor_path_pos = (self.cursor_path_pos + 1) % Self::PATH_CURSOR_COUNT;
+        let n = self.legal_moves.len();
+        if n == 0 {
+            return;
+        }
+        self.selected_move_idx = (self.selected_move_idx + 1) % n;
     }
 
     /// Confirms the move at the current cursor position, if one exists.
@@ -373,41 +378,14 @@ impl App {
         self.apply_move(mv);
     }
 
-    /// Returns the legal move whose source matches the current cursor position.
+    /// Returns the currently highlighted legal move, if any.
     pub fn legal_move_at_cursor(&self) -> Option<&Move> {
-        let gs = self.game_state.as_ref()?;
-        let path = gs.rules.path_for(gs.current_player);
-        let from_loc = if self.cursor_path_pos == 0 {
-            PieceLocation::Unplayed
-        } else {
-            PieceLocation::OnBoard(path.get(self.cursor_path_pos - 1)?)
-        };
-        self.legal_moves.iter().find(|m| m.from == from_loc)
+        self.legal_moves.get(self.selected_move_idx)
     }
 
-    /// Snaps the cursor to the path position of the first legal move.
+    /// Resets the selection to the first legal move.
     fn snap_cursor_to_first_move(&mut self) {
-        let first = match self.legal_moves.first() {
-            Some(m) => m,
-            None => {
-                self.cursor_path_pos = 0;
-                return;
-            }
-        };
-        match &first.from {
-            PieceLocation::Unplayed => {
-                self.cursor_path_pos = 0;
-            }
-            PieceLocation::OnBoard(sq) => {
-                if let Some(gs) = &self.game_state {
-                    let path = gs.rules.path_for(gs.current_player);
-                    self.cursor_path_pos = path.index_of(*sq).map(|i| i + 1).unwrap_or(0);
-                }
-            }
-            _ => {
-                self.cursor_path_pos = 0;
-            }
-        }
+        self.selected_move_idx = 0;
     }
 
     /// Applies a move to the current game state and handles turn transitions.
@@ -423,37 +401,41 @@ impl App {
             ur_core::player::Player::Player1 => 1,
             ur_core::player::Player::Player2 => 2,
         };
+        let player_idx = mv.piece.player.index();
         let piece_desc = format!("P{player_num}");
-        match &mv.to {
+        let panel_event = match &mv.to {
             ur_core::state::PieceLocation::OnBoard(sq) => {
                 if result.captured.is_some() {
                     self.stats.captures[player_num - 1] += 1;
                     self.log
                         .push(format!("{piece_desc} captured on ({},{})", sq.row, sq.col));
+                    Some("\u{25c6} captured!".to_string())
                 } else if result.landed_on_rosette {
                     self.log.push(format!(
                         "{piece_desc} landed on rosette ({},{}) — extra turn!",
                         sq.row, sq.col
                     ));
+                    Some("\u{2736} rosette! +1 turn".to_string())
                 } else {
                     self.log
                         .push(format!("{piece_desc} moved to ({},{})", sq.row, sq.col));
+                    None
                 }
             }
             ur_core::state::PieceLocation::Scored => {
                 self.log.push(format!("{piece_desc} scored a piece!"));
+                Some("\u{2713} scored!".to_string())
             }
-            _ => {}
-        }
+            _ => None,
+        };
+        self.last_event[player_idx] = panel_event;
 
         self.game_state = Some(result.new_state.clone());
-        // Save AI's roll before clearing, so the AI panel can show it dimmed.
-        if mv.piece.player == ur_core::player::Player::Player2 {
-            self.last_opponent_roll = self.dice_roll;
-        }
+        // Save each player's roll before clearing so inactive panels can show it.
+        self.last_roll[player_idx] = self.dice_roll;
         self.dice_roll = None;
         self.legal_moves.clear();
-        self.cursor_path_pos = 0;
+        self.selected_move_idx = 0;
 
         if result.game_over {
             self.screen = Screen::GameOver;
@@ -465,7 +447,7 @@ impl App {
             if let ur_core::state::PieceLocation::OnBoard(sq) = mv.to {
                 self.animation = Some(Animation::CaptureFlash {
                     square: sq,
-                    frames_remaining: 9,
+                    frames_remaining: 18, // ≈0.6 s
                 });
                 // After the animation completes, on_animation_done will be called.
                 // dice_roll is already None at this point, so it will be a no-op there.
@@ -484,8 +466,8 @@ impl App {
                 let is_player1 = mv.piece.player == ur_core::player::Player::Player1;
                 self.animation = Some(Animation::PieceMove {
                     remaining: path_squares,
-                    frames_per_step: 3,
-                    frames_this_step: 3,
+                    frames_per_step: 7, // ≈0.23 s per step at 30 fps
+                    frames_this_step: 7,
                     is_player1,
                 });
             }
@@ -549,12 +531,13 @@ impl App {
 
         let roll = ur_core::dice::Dice::roll(&mut self.rng);
         self.log.push(format!("AI rolled {}", roll.value()));
+        // Always show the AI's roll in its panel (during thinking and for no-moves).
+        self.dice_roll = Some(roll);
+        self.last_roll[1] = Some(roll);
 
         let moves = gs.legal_moves(roll);
         if moves.is_empty() {
             self.log.push("AI has no moves — passing turn".to_string());
-            // Show the no-moves (red) state in the AI panel for FORFEIT_DISPLAY_MS.
-            self.dice_roll = Some(roll); // panel needs the value to render red
             self.forfeit_after = Some(
                 std::time::Instant::now() + std::time::Duration::from_millis(FORFEIT_DISPLAY_MS),
             );
@@ -620,6 +603,10 @@ impl App {
             return;
         }
         self.forfeit_after = None;
+        // Save the forfeited roll before clearing so the inactive panel can still show it.
+        if let Some(ref gs) = self.game_state {
+            self.last_roll[gs.current_player.index()] = self.dice_roll;
+        }
         self.dice_roll = None;
         let gs = match self.game_state.take() {
             Some(gs) => gs,
@@ -832,19 +819,17 @@ mod tests {
     }
 
     #[test]
-    fn test_select_next_wraps_path_cursor() {
+    fn test_select_next_is_noop_with_no_legal_moves() {
         let mut app = App::new();
-        app.cursor_path_pos = App::PATH_CURSOR_COUNT - 1;
         app.handle_select_next();
-        assert_eq!(app.cursor_path_pos, 0);
+        assert_eq!(app.selected_move_idx, 0);
     }
 
     #[test]
-    fn test_select_prev_wraps_path_cursor() {
+    fn test_select_prev_is_noop_with_no_legal_moves() {
         let mut app = App::new();
-        app.cursor_path_pos = 0;
         app.handle_select_prev();
-        assert_eq!(app.cursor_path_pos, App::PATH_CURSOR_COUNT - 1);
+        assert_eq!(app.selected_move_idx, 0);
     }
 
     #[test]
@@ -854,7 +839,8 @@ mod tests {
         assert!(app.roll_after.is_none());
         assert!(app.forfeit_after.is_none());
         assert!(!app.rosette_reroll);
-        assert!(app.last_opponent_roll.is_none());
+        assert!(app.last_roll[0].is_none());
+        assert!(app.last_roll[1].is_none());
     }
 
     #[test]
@@ -972,9 +958,9 @@ mod tests {
             .expect("should have at least one legal move");
         app.apply_move(mv);
         assert_eq!(
-            app.last_opponent_roll,
+            app.last_roll[1],
             Some(Dice(1)),
-            "last_opponent_roll must be saved before dice_roll is cleared"
+            "last_roll[P2] must be saved before dice_roll is cleared"
         );
     }
 
@@ -1015,11 +1001,9 @@ mod tests {
             app.forfeit_after.is_none(),
             "forfeit_after must be cleared after firing"
         );
-        assert!(
-            app.dice_roll.is_none(),
-            "dice_roll must be cleared after forfeit"
-        );
-        // Player1 forfeited → Player2 (AI) should now be active → ai_thinking true
+        // Player1 forfeited → Player2 (AI) should now be active → ai_thinking true.
+        // Note: start_ai_turn() sets dice_roll to the AI's roll immediately, so
+        // dice_roll is Some here (the AI's roll), not None.
         assert!(app.ai_thinking, "AI turn should have started after forfeit");
     }
 
