@@ -10,7 +10,6 @@ pub enum Action {
     Confirm,
     Back,
     // Gameplay
-    RollDice,
     SelectPrev,
     SelectNext,
     ConfirmMove,
@@ -48,7 +47,6 @@ pub fn map_key(key: KeyEvent, screen: &Screen) -> Option<Action> {
             _ => None,
         },
         Screen::Game => match key.code {
-            KeyCode::Char(' ') => Some(Action::RollDice),
             KeyCode::Up | KeyCode::Char('k') | KeyCode::Left | KeyCode::Char('h') => {
                 Some(Action::SelectPrev)
             }
@@ -91,9 +89,9 @@ mod tests {
     }
 
     #[test]
-    fn test_space_maps_to_roll_dice_in_game() {
+    fn test_space_in_game_returns_none_after_roll_removed() {
         let action = map_key(key(KeyCode::Char(' ')), &crate::app::Screen::Game);
-        assert_eq!(action, Some(Action::RollDice));
+        assert_eq!(action, None);
     }
 
     #[test]
@@ -189,10 +187,7 @@ mod tests {
     #[test]
     fn test_up_down_scroll_on_help() {
         let screen = crate::app::Screen::Help { from_game: true };
-        assert_eq!(
-            map_key(key(KeyCode::Up), &screen),
-            Some(Action::ScrollUp)
-        );
+        assert_eq!(map_key(key(KeyCode::Up), &screen), Some(Action::ScrollUp));
         assert_eq!(
             map_key(key(KeyCode::Down), &screen),
             Some(Action::ScrollDown)

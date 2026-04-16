@@ -284,6 +284,7 @@ impl App {
     ///
     /// Only allowed during Player1's turn, in `WaitingForRoll` phase, when no
     /// animation is currently running.
+    #[allow(dead_code)]
     pub fn handle_roll_dice(&mut self) {
         let gs = match &self.game_state {
             Some(gs) => gs,
@@ -677,7 +678,10 @@ mod tests {
         app.animation = Some(crate::animation::Animation::Done);
         app.handle_roll_dice();
         // Still Done — the new dice animation was not started
-        assert!(matches!(app.animation, Some(crate::animation::Animation::Done)));
+        assert!(matches!(
+            app.animation,
+            Some(crate::animation::Animation::Done)
+        ));
     }
 
     #[test]
@@ -701,7 +705,10 @@ mod tests {
         let mut app = App::new();
         app.screen = Screen::DifficultySelect { selected: 0 };
         app.handle_menu_up();
-        assert!(matches!(app.screen, Screen::DifficultySelect { selected: 0 }));
+        assert!(matches!(
+            app.screen,
+            Screen::DifficultySelect { selected: 0 }
+        ));
     }
 
     #[test]
@@ -709,7 +716,10 @@ mod tests {
         let mut app = App::new();
         app.screen = Screen::DifficultySelect { selected: 2 };
         app.handle_menu_down();
-        assert!(matches!(app.screen, Screen::DifficultySelect { selected: 2 }));
+        assert!(matches!(
+            app.screen,
+            Screen::DifficultySelect { selected: 2 }
+        ));
     }
 
     #[test]

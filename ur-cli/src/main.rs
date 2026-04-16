@@ -92,7 +92,6 @@ fn handle_action(app: &mut App, action: Action) {
         Action::Back => app.handle_back(),
         Action::MenuUp => app.handle_menu_up(),
         Action::MenuDown => app.handle_menu_down(),
-        Action::RollDice => app.handle_roll_dice(),
         Action::SelectPrev => app.handle_select_prev(),
         Action::SelectNext => app.handle_select_next(),
         Action::ConfirmMove => app.handle_confirm_move(),
