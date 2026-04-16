@@ -78,8 +78,9 @@ pub struct App {
     pub game_state: Option<GameState>,
     pub dice_roll: Option<Dice>,
     pub legal_moves: Vec<Move>,
-    /// Index into `legal_moves` for the currently highlighted move.
-    pub selected_move_idx: usize,
+    /// Cursor position along the current player's path.
+    /// 0 = unplayed-pieces pool; k = path square at index k-1 (1-based).
+    pub cursor_path_pos: usize,
     pub log: Vec<String>,
     pub log_visible: bool,
     pub stats: GameStats,
@@ -114,7 +115,7 @@ impl App {
             game_state: None,
             dice_roll: None,
             legal_moves: Vec::new(),
-            selected_move_idx: 0,
+            cursor_path_pos: 0,
             log: Vec::new(),
             log_visible: false,
             stats: GameStats::default(),
@@ -175,7 +176,7 @@ impl App {
         self.log.clear();
         self.dice_roll = None;
         self.legal_moves.clear();
-        self.selected_move_idx = 0;
+        self.cursor_path_pos = 0;
         self.animation = None;
         self.ai_thinking = false;
         self.ai_receiver = None;
@@ -348,22 +349,25 @@ impl App {
         self.dice_roll = Some(final_value);
     }
 
-    /// Cycles selection to the previous legal move (no-op if no legal moves).
+    /// Moves the cursor one step backward along the path (toward the pool).
+    /// Clamped at 0 — never wraps.
     pub fn handle_select_prev(&mut self) {
-        let n = self.legal_moves.len();
-        if n == 0 {
-            return;
+        if self.cursor_path_pos > 0 {
+            self.cursor_path_pos -= 1;
         }
-        self.selected_move_idx = (self.selected_move_idx + n - 1) % n;
     }
 
-    /// Cycles selection to the next legal move (no-op if no legal moves).
+    /// Moves the cursor one step forward along the path (toward the exit).
+    /// Clamped at the last path square — never wraps.
     pub fn handle_select_next(&mut self) {
-        let n = self.legal_moves.len();
-        if n == 0 {
-            return;
+        let max = match &self.game_state {
+            Some(gs) => gs.rules.path_for(gs.current_player).len(),
+            None => return,
+        };
+        // cursor_path_pos 0 = pool, 1..=max = path[0..max-1]
+        if self.cursor_path_pos < max {
+            self.cursor_path_pos += 1;
         }
-        self.selected_move_idx = (self.selected_move_idx + 1) % n;
     }
 
     /// Confirms the move at the current cursor position, if one exists.
@@ -378,14 +382,24 @@ impl App {
         self.apply_move(mv);
     }
 
-    /// Returns the currently highlighted legal move, if any.
+    /// Returns the legal move whose source matches the current cursor position, if any.
     pub fn legal_move_at_cursor(&self) -> Option<&Move> {
-        self.legal_moves.get(self.selected_move_idx)
+        let gs = self.game_state.as_ref()?;
+        let from = if self.cursor_path_pos == 0 {
+            ur_core::state::PieceLocation::Unplayed
+        } else {
+            let sq = gs
+                .rules
+                .path_for(gs.current_player)
+                .get(self.cursor_path_pos - 1)?;
+            ur_core::state::PieceLocation::OnBoard(sq)
+        };
+        self.legal_moves.iter().find(|mv| mv.from == from)
     }
 
-    /// Resets the selection to the first legal move.
-    fn snap_cursor_to_first_move(&mut self) {
-        self.selected_move_idx = 0;
+    /// Resets the cursor to the pool (position 0).
+    fn snap_cursor_to_start(&mut self) {
+        self.cursor_path_pos = 0;
     }
 
     /// Applies a move to the current game state and handles turn transitions.
@@ -435,7 +449,7 @@ impl App {
         self.last_roll[player_idx] = self.dice_roll;
         self.dice_roll = None;
         self.legal_moves.clear();
-        self.selected_move_idx = 0;
+        self.cursor_path_pos = 0;
 
         if result.game_over {
             self.screen = Screen::GameOver;
@@ -514,7 +528,7 @@ impl App {
                     );
                 } else {
                     self.legal_moves = moves;
-                    self.snap_cursor_to_first_move();
+                    self.snap_cursor_to_start();
                 }
             }
         }
@@ -819,17 +833,50 @@ mod tests {
     }
 
     #[test]
-    fn test_select_next_is_noop_with_no_legal_moves() {
+    fn test_select_next_advances_cursor_along_path() {
         let mut app = App::new();
+        app.game_state = Some(ur_core::state::GameState::new(
+            &ur_core::state::GameRules::finkel(),
+        ));
+        app.cursor_path_pos = 0;
         app.handle_select_next();
-        assert_eq!(app.selected_move_idx, 0);
+        assert_eq!(app.cursor_path_pos, 1);
+        app.handle_select_next();
+        assert_eq!(app.cursor_path_pos, 2);
     }
 
     #[test]
-    fn test_select_prev_is_noop_with_no_legal_moves() {
+    fn test_select_next_clamps_at_path_end() {
         let mut app = App::new();
+        let rules = ur_core::state::GameRules::finkel();
+        let gs = ur_core::state::GameState::new(&rules);
+        let path_len = rules.path_for(gs.current_player).len(); // 14
+        app.cursor_path_pos = path_len;
+        app.game_state = Some(gs);
+        app.handle_select_next();
+        assert_eq!(
+            app.cursor_path_pos, path_len,
+            "must not go past last square"
+        );
+    }
+
+    #[test]
+    fn test_select_prev_decrements_cursor() {
+        let mut app = App::new();
+        app.game_state = Some(ur_core::state::GameState::new(
+            &ur_core::state::GameRules::finkel(),
+        ));
+        app.cursor_path_pos = 3;
         app.handle_select_prev();
-        assert_eq!(app.selected_move_idx, 0);
+        assert_eq!(app.cursor_path_pos, 2);
+    }
+
+    #[test]
+    fn test_select_prev_clamps_at_pool() {
+        let mut app = App::new();
+        app.cursor_path_pos = 0;
+        app.handle_select_prev();
+        assert_eq!(app.cursor_path_pos, 0, "must not go below pool position");
     }
 
     #[test]

@@ -43,33 +43,52 @@ pub enum PanelDice {
     RosettePending,
 }
 
-/// Builds a `Line` showing four tetrahedral dice: ▲ for scored-side-up, △ for blank.
-/// `value` filled dice are drawn in `color`; the rest in `DarkGray`.
-/// When `bold` is true the filled dice are rendered with the BOLD modifier.
-fn dice_pips_line(value: u8, color: Color, bold: bool) -> Line<'static> {
-    const FILLED: &str = "\u{25b2}"; // ▲
-    const EMPTY: &str = "\u{25b3}"; // △
-    let mut spans = vec![Span::raw("  ")];
+/// Renders four binary dice as three-row ASCII boxes:
+///
+/// ```text
+///   ┌───┐ ┌───┐ ┌───┐ ┌───┐
+///   │ ● │ │ ● │ │   │ │   │
+///   └───┘ └───┘ └───┘ └───┘
+/// ```
+///
+/// The first `value` dice show a filled pip in `color`; the rest are blank
+/// and drawn in `DarkGray`. When `dim` is true all borders are `DarkGray`
+/// (used for the inactive "last roll" display).
+fn dice_box_lines(value: u8, color: Color, dim: bool) -> Vec<Line<'static>> {
+    let border_color = if dim { Color::DarkGray } else { color };
+    let border = Style::default().fg(border_color);
+
+    let mut top_spans = vec![Span::raw("  ")];
+    let mut mid_spans = vec![Span::raw("  ")];
+    let mut bot_spans = vec![Span::raw("  ")];
+
     for i in 0..4u8 {
-        let (sym, c, modifier) = if i < value {
-            let m = if bold {
-                Modifier::BOLD
-            } else {
-                Modifier::empty()
-            };
-            (FILLED, color, m)
+        top_spans.push(Span::styled("┌───┐", border));
+        bot_spans.push(Span::styled("└───┘", border));
+
+        mid_spans.push(Span::styled("│", border));
+        if i < value {
+            mid_spans.push(Span::styled(
+                " ● ",
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ));
         } else {
-            (EMPTY, Color::DarkGray, Modifier::empty())
-        };
-        spans.push(Span::styled(
-            sym.to_string(),
-            Style::default().fg(c).add_modifier(modifier),
-        ));
+            mid_spans.push(Span::styled("   ", Style::default().fg(Color::DarkGray)));
+        }
+        mid_spans.push(Span::styled("│", border));
+
         if i < 3 {
-            spans.push(Span::raw("   "));
+            top_spans.push(Span::raw(" "));
+            mid_spans.push(Span::raw(" "));
+            bot_spans.push(Span::raw(" "));
         }
     }
-    Line::from(spans)
+
+    vec![
+        Line::from(top_spans),
+        Line::from(mid_spans),
+        Line::from(bot_spans),
+    ]
 }
 
 // ── Board geometry helpers ───────────────────────────────────────────────────
@@ -464,7 +483,7 @@ pub fn render_player_panel(
         }
         PanelDice::Animating(display) => {
             text.push(Line::from(""));
-            text.push(dice_pips_line(display.value(), color, false));
+            text.extend(dice_box_lines(display.value(), color, false));
             text.push(Line::from(Span::styled(
                 "  = ?",
                 Style::default().fg(Color::DarkGray),
@@ -472,7 +491,7 @@ pub fn render_player_panel(
         }
         PanelDice::Result(roll) => {
             text.push(Line::from(""));
-            text.push(dice_pips_line(roll.value(), color, true));
+            text.extend(dice_box_lines(roll.value(), color, false));
             text.push(Line::from(Span::styled(
                 format!("  = {}", roll.value()),
                 Style::default()
@@ -490,7 +509,7 @@ pub fn render_player_panel(
         }
         PanelDice::NoMoves(roll) => {
             text.push(Line::from(""));
-            text.push(dice_pips_line(roll.value(), Color::Red, true));
+            text.extend(dice_box_lines(roll.value(), Color::Red, false));
             text.push(Line::from(Span::styled(
                 format!("  = {}  no moves", roll.value()),
                 Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
@@ -502,10 +521,10 @@ pub fn render_player_panel(
         }
         PanelDice::LastRoll(roll) => {
             text.push(Line::from(""));
-            text.push(dice_pips_line(roll.value(), color, false));
+            text.extend(dice_box_lines(roll.value(), color, true));
             text.push(Line::from(Span::styled(
                 format!("  = {}  last roll", roll.value()),
-                Style::default().fg(color).add_modifier(Modifier::DIM),
+                Style::default().fg(Color::DarkGray),
             )));
         }
         PanelDice::RosettePending => {
@@ -655,12 +674,14 @@ pub fn render_game(f: &mut Frame, app: &App) {
 
     let rules = &game_state.rules;
 
+    let path = rules.path_for(game_state.current_player);
+    let pool_selected = app.cursor_path_pos == 0;
+    let selected_square = if app.cursor_path_pos == 0 {
+        None
+    } else {
+        path.get(app.cursor_path_pos - 1)
+    };
     let cursor_move = app.legal_move_at_cursor();
-    let selected_square = cursor_move.and_then(|mv| match mv.from {
-        PieceLocation::OnBoard(sq) => Some(sq),
-        _ => None,
-    });
-    let pool_selected = cursor_move.is_some_and(|mv| mv.from == PieceLocation::Unplayed);
     let target_square = cursor_move.and_then(|mv| match mv.to {
         PieceLocation::OnBoard(sq) => Some(sq),
         _ => None,
