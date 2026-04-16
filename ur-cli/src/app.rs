@@ -522,15 +522,13 @@ impl App {
                 let moves = gs.legal_moves(roll);
                 if moves.is_empty() {
                     self.log
-                        .push(format!("Roll {} — no moves, turn forfeited", roll.value()));
-                    if let Some(new_gs) = gs.clone().forfeit_turn() {
-                        let next_player = new_gs.current_player;
-                        self.game_state = Some(new_gs);
-                        if next_player == ur_core::player::Player::Player2 {
-                            self.start_ai_turn();
-                        }
-                    }
-                    self.dice_roll = None;
+                        .push(format!("Roll {} — no moves, passing turn", roll.value()));
+                    // Show the no-moves (red) state for FORFEIT_DISPLAY_MS before
+                    // auto-advancing. dice_roll is kept so the panel renders red.
+                    self.forfeit_after = Some(
+                        std::time::Instant::now()
+                            + std::time::Duration::from_millis(FORFEIT_DISPLAY_MS),
+                    );
                 } else {
                     self.legal_moves = moves;
                     self.snap_cursor_to_first_move();
@@ -553,16 +551,12 @@ impl App {
 
         let moves = gs.legal_moves(roll);
         if moves.is_empty() {
-            self.log
-                .push("AI has no moves — turn forfeited".to_string());
-            if let Some(new_gs) = gs.forfeit_turn() {
-                let next_player = new_gs.current_player;
-                self.game_state = Some(new_gs);
-                // Re-trigger if AI still has the turn (e.g., after a rosette extra-turn that rolls 0)
-                if next_player == ur_core::player::Player::Player2 {
-                    self.start_ai_turn();
-                }
-            }
+            self.log.push("AI has no moves — passing turn".to_string());
+            // Show the no-moves (red) state in the AI panel for FORFEIT_DISPLAY_MS.
+            self.dice_roll = Some(roll); // panel needs the value to render red
+            self.forfeit_after = Some(
+                std::time::Instant::now() + std::time::Duration::from_millis(FORFEIT_DISPLAY_MS),
+            );
             return;
         }
 
@@ -570,7 +564,6 @@ impl App {
         let (tx, rx) = std::sync::mpsc::channel();
         self.ai_receiver = Some(rx);
         self.ai_thinking = true;
-        self.dice_roll = Some(roll);
 
         std::thread::spawn(move || {
             let chosen = ur_core::ai::choose_move(&gs, roll, depth);
@@ -614,6 +607,38 @@ impl App {
             display: Dice(0),
         });
         self.dice_roll = Some(final_value);
+    }
+
+    /// Called every tick. If `forfeit_after` has elapsed, forfeits the current
+    /// player's turn and starts the next player's turn.
+    #[allow(dead_code)]
+    pub fn tick_forfeit_delay(&mut self) {
+        let deadline = match self.forfeit_after {
+            Some(t) => t,
+            None => return,
+        };
+        if std::time::Instant::now() < deadline {
+            return;
+        }
+        self.forfeit_after = None;
+        self.dice_roll = None;
+        let gs = match self.game_state.take() {
+            Some(gs) => gs,
+            None => return,
+        };
+        if let Some(new_gs) = gs.forfeit_turn() {
+            let next_player = new_gs.current_player;
+            self.game_state = Some(new_gs);
+            if next_player == ur_core::player::Player::Player2 {
+                self.start_ai_turn();
+            } else {
+                self.pending_roll = true;
+                self.roll_after = Some(
+                    std::time::Instant::now()
+                        + std::time::Duration::from_millis(AUTO_ROLL_DELAY_MS),
+                );
+            }
+        }
     }
 
     /// Polls the AI move channel (non-blocking). If a result is ready, clears
@@ -948,6 +973,66 @@ mod tests {
             app.last_opponent_roll,
             Some(Dice(1)),
             "last_opponent_roll must be saved before dice_roll is cleared"
+        );
+    }
+
+    #[test]
+    fn test_on_animation_done_sets_forfeit_after_on_no_moves() {
+        let rules = ur_core::state::GameRules::finkel();
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(ur_core::state::GameState::new(&rules));
+        // Roll 0 — guaranteed no moves.
+        app.dice_roll = Some(ur_core::dice::Dice(0));
+        app.on_animation_done();
+        assert!(
+            app.forfeit_after.is_some(),
+            "forfeit_after must be set when there are no legal moves"
+        );
+        assert!(
+            app.dice_roll.is_some(),
+            "dice_roll must NOT be cleared yet — panel shows red state until forfeit fires"
+        );
+        assert!(
+            app.legal_moves.is_empty(),
+            "no legal moves should be populated"
+        );
+    }
+
+    #[test]
+    fn test_tick_forfeit_delay_advances_to_ai_when_deadline_past() {
+        let rules = ur_core::state::GameRules::finkel();
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(ur_core::state::GameState::new(&rules));
+        app.dice_roll = Some(ur_core::dice::Dice(0));
+        // Deadline already past
+        app.forfeit_after = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
+        app.tick_forfeit_delay();
+        assert!(
+            app.forfeit_after.is_none(),
+            "forfeit_after must be cleared after firing"
+        );
+        assert!(
+            app.dice_roll.is_none(),
+            "dice_roll must be cleared after forfeit"
+        );
+        // Player1 forfeited → Player2 (AI) should now be active → ai_thinking true
+        assert!(app.ai_thinking, "AI turn should have started after forfeit");
+    }
+
+    #[test]
+    fn test_tick_forfeit_delay_waits_until_deadline() {
+        let rules = ur_core::state::GameRules::finkel();
+        let mut app = App::new();
+        app.screen = Screen::Game;
+        app.game_state = Some(ur_core::state::GameState::new(&rules));
+        app.dice_roll = Some(ur_core::dice::Dice(0));
+        app.forfeit_after = Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
+        app.tick_forfeit_delay();
+        assert!(
+            app.forfeit_after.is_some(),
+            "forfeit_after must not fire before deadline"
         );
     }
 
