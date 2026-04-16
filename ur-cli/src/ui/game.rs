@@ -8,6 +8,7 @@ use ratatui::{
 };
 use ur_core::{
     board::Square,
+    dice::Dice,
     player::Player,
     state::{Board, GameRules, PieceLocation},
 };
@@ -22,6 +23,45 @@ pub const COLOR_ROSETTE_BG: Color = Color::Rgb(61, 43, 31);
 pub const COLOR_ROSETTE_FG: Color = Color::Yellow;
 const COLOR_SELECTED_BG: Color = Color::Rgb(30, 60, 30);
 const COLOR_TARGET_BG: Color = Color::Rgb(40, 20, 60);
+
+/// Describes what the dice widget inside a player panel should show.
+#[derive(Debug, Clone, Copy)]
+pub enum PanelDice {
+    /// Nothing to show (panel is inactive and no prior roll to display).
+    Hidden,
+    /// Auto-roll is queued; waiting for the delay to elapse.
+    Pending,
+    /// Dice roll animation is in progress; carries the current cycling display value.
+    Animating(Dice),
+    /// Roll landed with legal moves available; carries the final value.
+    Result(Dice),
+    /// Roll landed with no legal moves; displayed in red before auto-forfeit.
+    NoMoves(Dice),
+    /// Opponent's last roll, shown dimmed in the inactive panel.
+    LastRoll(Dice),
+    /// Rosette extra turn granted; immediate re-roll incoming.
+    RosettePending,
+}
+
+/// Builds a `Line` showing four tetrahedral dice: ▲ for scored-side-up, △ for blank.
+/// `value` filled dice are drawn in `color`; the rest in `DarkGray`.
+fn dice_pips_line(value: u8, color: Color) -> Line<'static> {
+    const FILLED: &str = "\u{25b2}"; // ▲
+    const EMPTY:  &str = "\u{25b3}"; // △
+    let mut spans = vec![Span::raw("  ")];
+    for i in 0..4u8 {
+        let (sym, c) = if i < value {
+            (FILLED, color)
+        } else {
+            (EMPTY, Color::DarkGray)
+        };
+        spans.push(Span::styled(sym.to_string(), Style::default().fg(c)));
+        if i < 3 {
+            spans.push(Span::raw("  "));
+        }
+    }
+    Line::from(spans)
+}
 
 // ── Board geometry helpers ───────────────────────────────────────────────────
 
