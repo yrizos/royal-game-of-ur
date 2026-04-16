@@ -961,11 +961,16 @@ mod tests {
         let rules = GameRules::finkel();
         let mut app = App::new();
         app.screen = Screen::Game;
-        // Player1 enters a piece from Unplayed with roll=1 → non-rosette landing.
-        let gs = GameState::new(&rules);
-        let path = rules.path_for(Player::Player1);
-        let to_sq = path.get(0).unwrap(); // path[0]=(2,3) — not a rosette
-        assert!(!rules.board_shape.is_rosette(to_sq));
+        // AI (Player2) enters a piece from Unplayed with roll=1.
+        // path[0] for Player2 is (0,3) — not a rosette — so control returns to Player1.
+        let mut gs = GameState::new(&rules);
+        gs.current_player = Player::Player2;
+        let path = rules.path_for(Player::Player2);
+        let to_sq = path.get(0).unwrap(); // (0,3) — not a rosette
+        assert!(
+            !rules.board_shape.is_rosette(to_sq),
+            "path[0] for Player2 must not be a rosette for this scenario"
+        );
         let moves = gs.legal_moves(Dice(1));
         let mv = moves
             .into_iter()
@@ -973,13 +978,19 @@ mod tests {
             .expect("should have at least one legal move");
         app.game_state = Some(gs);
         app.dice_roll = Some(Dice(1));
-        // After this move Player2 (AI) should get the turn → start_ai_turn fires.
-        // Verify that pending_roll is NOT set (AI uses start_ai_turn, not pending_roll).
         app.apply_move(mv);
-        // AI turn: pending_roll should be false.
+        // After AI's move on a non-rosette, Player1 (human) gets the turn.
         assert!(
-            !app.pending_roll,
-            "pending_roll must not be set when it's the AI's turn"
+            app.pending_roll,
+            "pending_roll must be set after AI move returns control to human"
+        );
+        assert!(
+            !app.rosette_reroll,
+            "non-rosette landing should not set rosette_reroll"
+        );
+        assert!(
+            app.roll_after.is_some(),
+            "roll_after must be set for the 300ms delay"
         );
     }
 }
