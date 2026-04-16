@@ -52,6 +52,13 @@ const DICE_OFF_ANIMATION_FRAMES: u32 = 18;
 /// Number of animation ticks for a dice roll animation (≈0.6 s at 30 fps).
 const DICE_ROLL_ANIMATION_FRAMES: u32 = 18;
 
+/// Delay in ms before the dice roll animation fires automatically.
+#[allow(dead_code)]
+const AUTO_ROLL_DELAY_MS: u64 = 300;
+/// How long (ms) to display a no-moves result before forfeiting.
+#[allow(dead_code)]
+const FORFEIT_DISPLAY_MS: u64 = 1000;
+
 /// Difficulty level maps to expectiminimax search depth.
 pub const DIFFICULTIES: [(&str, u32); 3] = [("Easy", 2), ("Medium", 4), ("Hard", 6)];
 
@@ -86,6 +93,16 @@ pub struct App {
     pub ai_receiver: Option<std::sync::mpsc::Receiver<ur_core::state::Move>>,
     /// Scroll offset for the help screen (lines scrolled down).
     pub help_scroll: u16,
+    /// True when a dice roll should fire automatically as soon as conditions allow.
+    pub pending_roll: bool,
+    /// Earliest time at which the auto-roll may fire (None = fire immediately).
+    pub roll_after: Option<std::time::Instant>,
+    /// When set, the no-moves forfeit fires at this time.
+    pub forfeit_after: Option<std::time::Instant>,
+    /// True when the auto-roll is a rosette re-roll (skips the normal delay).
+    pub rosette_reroll: bool,
+    /// The most recent roll made by the AI, kept for display after apply_move clears dice_roll.
+    pub last_opponent_roll: Option<Dice>,
 }
 
 impl App {
@@ -108,6 +125,11 @@ impl App {
             ai_spinner_frame: 0,
             ai_receiver: None,
             help_scroll: 0,
+            pending_roll: false,
+            roll_after: None,
+            forfeit_after: None,
+            rosette_reroll: false,
+            last_opponent_roll: None,
         }
     }
 
@@ -280,10 +302,10 @@ impl App {
         }
     }
 
-    /// Handles the player pressing the roll-dice key.
+    /// Rolls the dice for Player 1, starting a dice animation.
     ///
     /// Only allowed during Player1's turn, in `WaitingForRoll` phase, when no
-    /// animation is currently running.
+    /// animation is currently running and no roll is already pending.
     #[allow(dead_code)]
     pub fn handle_roll_dice(&mut self) {
         let gs = match &self.game_state {
@@ -736,5 +758,15 @@ mod tests {
         app.cursor_path_pos = 0;
         app.handle_select_prev();
         assert_eq!(app.cursor_path_pos, App::PATH_CURSOR_COUNT - 1);
+    }
+
+    #[test]
+    fn test_new_app_auto_roll_fields_initial_state() {
+        let app = App::new();
+        assert!(!app.pending_roll);
+        assert!(app.roll_after.is_none());
+        assert!(app.forfeit_after.is_none());
+        assert!(!app.rosette_reroll);
+        assert!(app.last_opponent_roll.is_none());
     }
 }
