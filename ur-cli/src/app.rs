@@ -66,6 +66,7 @@ pub const DIFFICULTIES: [(&str, u32); 3] = [("Easy", 2), ("Medium", 4), ("Hard",
 pub struct GameStats {
     pub moves: u32,
     pub start_time: Option<Instant>,
+    pub end_time: Option<Instant>,
     pub captures: [u32; 2],
 }
 
@@ -456,6 +457,7 @@ impl App {
         self.cursor_path_pos = 0;
 
         if result.game_over {
+            self.stats.end_time = Some(std::time::Instant::now());
             self.screen = Screen::GameOver;
             return;
         }

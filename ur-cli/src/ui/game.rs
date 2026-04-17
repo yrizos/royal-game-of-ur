@@ -808,11 +808,11 @@ pub fn render_game(f: &mut Frame, app: &App) {
     .render(board_area, f.buffer_mut());
 
     // Status bar
-    let elapsed = app
-        .stats
-        .start_time
-        .map(|t| t.elapsed())
-        .unwrap_or(std::time::Duration::ZERO);
+    let elapsed = match (app.stats.start_time, app.stats.end_time) {
+        (Some(start), Some(end)) => end.duration_since(start),
+        (Some(start), None) => start.elapsed(),
+        _ => std::time::Duration::ZERO,
+    };
     render_status_bar(
         f,
         status_area,
