@@ -139,6 +139,51 @@ fn dice_rolling_lines(frame: u32, color: Color) -> Vec<Line<'static>> {
     ]
 }
 
+/// Returns exactly 3 `Line`s for the dice box display area. Always 3 lines — never
+/// empty — so the panel layout section height is stable regardless of dice state.
+pub fn dice_section_lines(panel_dice: PanelDice, color: Color) -> Vec<Line<'static>> {
+    match panel_dice {
+        PanelDice::Hidden => dice_box_lines(0, Color::DarkGray, true),
+        PanelDice::Pending(frame) | PanelDice::Animating(frame) => dice_rolling_lines(frame, color),
+        PanelDice::Result(roll) => dice_box_lines(roll.value(), color, false),
+        PanelDice::NoMoves(roll) => dice_box_lines(roll.value(), Color::Red, false),
+        PanelDice::LastRoll(roll) => dice_box_lines(roll.value(), color, true),
+        PanelDice::RosettePending => dice_box_lines(0, Color::DarkGray, true),
+    }
+}
+
+/// Returns 1 `Line` with the status label shown below the dice boxes.
+pub fn dice_label_line(panel_dice: PanelDice, color: Color) -> Line<'static> {
+    match panel_dice {
+        PanelDice::Hidden => Line::from(""),
+        PanelDice::Pending(_) => Line::from(Span::styled(
+            "  rolling...",
+            Style::default().fg(color).add_modifier(Modifier::DIM),
+        )),
+        PanelDice::Animating(_) => {
+            Line::from(Span::styled("  = ?", Style::default().fg(Color::DarkGray)))
+        }
+        PanelDice::Result(roll) => Line::from(Span::styled(
+            format!("  = {}", roll.value()),
+            Style::default()
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        )),
+        PanelDice::NoMoves(roll) => Line::from(Span::styled(
+            format!("  = {}  no moves", roll.value()),
+            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+        )),
+        PanelDice::LastRoll(roll) => Line::from(Span::styled(
+            format!("  = {}  last roll", roll.value()),
+            Style::default().fg(Color::DarkGray),
+        )),
+        PanelDice::RosettePending => Line::from(Span::styled(
+            "  \u{2736} rosette! rolling again...",
+            Style::default().fg(Color::Yellow),
+        )),
+    }
+}
+
 // ── Board geometry helpers ───────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]
@@ -463,7 +508,7 @@ impl<'a> Widget for BoardWidget<'a> {
 
 // ── Helper functions ─────────────────────────────────────────────────────────
 
-/// Renders a player status panel showing captures, turn indicator, and dice widget.
+/// Renders a player status panel with fixed-height sections so nothing shifts.
 #[allow(clippy::too_many_arguments)]
 pub fn render_player_panel(
     f: &mut Frame,
@@ -472,32 +517,54 @@ pub fn render_player_panel(
     is_human: bool,
     is_current: bool,
     captures: u32,
+    unplayed: u8,
+    scored: u8,
     panel_dice: PanelDice,
     event_msg: Option<&str>,
 ) {
-    let color = if player == Player::Player1 {
-        COLOR_P1
-    } else {
-        COLOR_P2
+    use crate::ui::styled_box::StyledBox;
+
+    let color = match player {
+        Player::Player1 => COLOR_P1,
+        Player::Player2 => COLOR_P2,
     };
     let label = if is_human { "You" } else { "AI" };
     let player_num = match player {
         Player::Player1 => 1,
         Player::Player2 => 2,
     };
-    let name = format!("Player {} ({})", player_num, label);
+    let title = format!("Player {} ({})", player_num, label);
 
-    let title_style = Style::default().fg(color).add_modifier(Modifier::BOLD);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(if is_current {
-            Style::default().fg(color)
-        } else {
-            Style::default().fg(Color::DarkGray)
-        })
-        .title(Span::styled(format!(" {} ", name), title_style));
+    let border_color = if is_current { color } else { Color::DarkGray };
 
-    let turn_indicator = if is_current {
+    let sb = StyledBox {
+        title: &title,
+        border_color,
+        bottom_title: None,
+    };
+    let inner = sb.render(f, area);
+
+    // Fixed-height sections — order and heights never change.
+    let sections = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(1), // [0] turn indicator
+            Constraint::Length(1), // [1] blank
+            Constraint::Length(3), // [2] dice boxes (3 rows)
+            Constraint::Length(1), // [3] roll label
+            Constraint::Length(2), // [4] turn summary (2 lines, always reserved)
+            Constraint::Length(1), // [5] blank
+            Constraint::Length(1), // [6] divider
+            Constraint::Length(1), // [7] blank
+            Constraint::Length(1), // [8] scored
+            Constraint::Length(1), // [9] pool
+            Constraint::Length(1), // [10] captures
+            Constraint::Min(0),    // [11] overflow
+        ])
+        .split(inner);
+
+    // [0] Turn indicator
+    let turn_text = if is_current {
         if is_human {
             "\u{25b6} YOUR TURN"
         } else {
@@ -506,103 +573,80 @@ pub fn render_player_panel(
     } else {
         ""
     };
+    f.render_widget(
+        Paragraph::new(turn_text).style(Style::default().fg(color).add_modifier(Modifier::BOLD)),
+        sections[0],
+    );
 
-    let mut text = vec![
-        Line::from(Span::styled(
-            format!("Captures: {}", captures),
-            Style::default().fg(Color::Gray),
-        )),
-        Line::from(""),
-        Line::from(Span::styled(
-            turn_indicator,
-            Style::default().fg(color).add_modifier(Modifier::BOLD),
-        )),
-    ];
+    // [2] Dice boxes (always rendered, 3 lines)
+    let dice_lines = dice_section_lines(panel_dice, color);
+    f.render_widget(Paragraph::new(dice_lines), sections[2]);
 
-    // Dice widget
-    match panel_dice {
-        PanelDice::Hidden => {}
-        PanelDice::Pending(frame) => {
-            text.push(Line::from(""));
-            text.extend(dice_rolling_lines(frame, color));
-            text.push(Line::from(Span::styled(
-                "  rolling...",
-                Style::default().fg(color).add_modifier(Modifier::DIM),
-            )));
-        }
-        PanelDice::Animating(frame) => {
-            text.push(Line::from(""));
-            text.extend(dice_rolling_lines(frame, color));
-            text.push(Line::from(Span::styled(
-                "  = ?",
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
-        PanelDice::Result(roll) => {
-            text.push(Line::from(""));
-            text.extend(dice_box_lines(roll.value(), color, false));
-            text.push(Line::from(Span::styled(
-                format!("  = {}", roll.value()),
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            )));
-            if is_human {
-                text.push(Line::from(Span::styled(
-                    "  \u{25b6} pick a move",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                )));
-            }
-        }
-        PanelDice::NoMoves(roll) => {
-            text.push(Line::from(""));
-            text.extend(dice_box_lines(roll.value(), Color::Red, false));
-            text.push(Line::from(Span::styled(
-                format!("  = {}  no moves", roll.value()),
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            )));
-            text.push(Line::from(Span::styled(
-                "  passing turn...",
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
-        PanelDice::LastRoll(roll) => {
-            text.push(Line::from(""));
-            text.extend(dice_box_lines(roll.value(), color, true));
-            text.push(Line::from(Span::styled(
-                format!("  = {}  last roll", roll.value()),
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
-        PanelDice::RosettePending => {
-            text.push(Line::from(""));
-            text.push(Line::from(Span::styled(
-                "  \u{2736} rosette bonus!",
-                Style::default().fg(Color::Yellow),
-            )));
-            text.push(Line::from(Span::styled(
-                "  rolling again...",
-                Style::default().fg(Color::DarkGray),
-            )));
-        }
-    }
+    // [3] Roll label
+    let label_line = dice_label_line(panel_dice, color);
+    f.render_widget(Paragraph::new(vec![label_line]), sections[3]);
 
-    // Event message (last move outcome: capture, rosette, scored)
+    // [4] Turn summary — always exactly 2 lines
+    let mut summary: Vec<Line<'static>> = Vec::with_capacity(2);
     if let Some(msg) = event_msg {
-        text.push(Line::from(""));
-        text.push(Line::from(Span::styled(
-            format!("  {}", msg),
+        summary.push(Line::from(Span::styled(
+            msg.to_string(),
             Style::default()
                 .fg(Color::Yellow)
                 .add_modifier(Modifier::BOLD),
         )));
+    } else {
+        summary.push(Line::from(""));
     }
+    if matches!(panel_dice, PanelDice::Result(_)) && is_human {
+        summary.push(Line::from(Span::styled(
+            "\u{25b6} pick a move",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )));
+    } else {
+        summary.push(Line::from(""));
+    }
+    f.render_widget(Paragraph::new(summary), sections[4]);
 
-    let inner = block.inner(area);
-    f.render_widget(block, area);
-    f.render_widget(Paragraph::new(text), inner);
+    // [6] Divider
+    f.render_widget(
+        Paragraph::new("\u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}")
+            .style(Style::default().fg(Color::DarkGray)),
+        sections[6],
+    );
+
+    // [8] Scored dots
+    let scored_str = if scored == 0 {
+        String::new()
+    } else {
+        let dots: String = "\u{25cf} ".repeat(scored as usize);
+        dots.trim_end().to_string()
+    };
+    f.render_widget(
+        Paragraph::new(format!("Scored  {}", scored_str)).style(Style::default().fg(color)),
+        sections[8],
+    );
+
+    // [9] Pool dots
+    let pool_str = if unplayed == 0 {
+        String::new()
+    } else {
+        let dots: String = "\u{25cf} ".repeat(unplayed as usize);
+        dots.trim_end().to_string()
+    };
+    f.render_widget(
+        Paragraph::new(format!("Pool    {}", pool_str))
+            .style(Style::default().fg(color).add_modifier(Modifier::DIM)),
+        sections[9],
+    );
+
+    // [10] Captures
+    f.render_widget(
+        Paragraph::new(format!("Captures: {}", captures)).style(Style::default().fg(Color::Gray)),
+        sections[10],
+    );
 }
 
 /// Computes what the dice widget should display for `player`'s panel.
@@ -744,6 +788,8 @@ pub fn render_game(f: &mut Frame, app: &App) {
         true,
         game_state.current_player == Player::Player1,
         app.stats.captures[0],
+        game_state.unplayed[0],
+        game_state.scored[0],
         compute_panel_dice(app, Player::Player1),
         app.last_event[0].as_deref(),
     );
@@ -754,6 +800,8 @@ pub fn render_game(f: &mut Frame, app: &App) {
         false,
         game_state.current_player == Player::Player2,
         app.stats.captures[1],
+        game_state.unplayed[1],
+        game_state.scored[1],
         compute_panel_dice(app, Player::Player2),
         app.last_event[1].as_deref(),
     );
@@ -995,6 +1043,25 @@ mod tests {
             matches!(result, PanelDice::Hidden),
             "expected Hidden, got {:?}",
             result
+        );
+    }
+
+    #[test]
+    fn test_panel_dice_hidden_renders_empty_boxes() {
+        // PanelDice::Hidden must still produce 3 dice box lines (not 0).
+        let lines = dice_section_lines(PanelDice::Hidden, COLOR_P1);
+        assert_eq!(lines.len(), 3, "hidden state must still render 3 dice rows");
+    }
+
+    #[test]
+    fn test_panel_dice_hidden_label_is_blank() {
+        let label = dice_label_line(PanelDice::Hidden, COLOR_P1);
+        // Label line exists but contains only whitespace/empty spans.
+        let content: String = label.spans.iter().map(|s| s.content.as_ref()).collect();
+        assert!(
+            content.trim().is_empty(),
+            "hidden dice label should be blank, got: {:?}",
+            content
         );
     }
 }
