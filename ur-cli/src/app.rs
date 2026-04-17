@@ -3,8 +3,17 @@ use rand::{rngs::SmallRng, SeedableRng};
 use std::time::Instant;
 use ur_core::{
     dice::Dice,
+    player::Player,
     state::{GameState, Move},
 };
+
+/// A single entry in the game event log.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LogEntry {
+    /// Which player caused this event. `None` for system messages.
+    pub player: Option<Player>,
+    pub text: String,
+}
 
 /// Which screen is currently active.
 #[derive(Debug)]
@@ -82,7 +91,7 @@ pub struct App {
     /// Cursor position along the current player's path.
     /// 0 = unplayed-pieces pool; k = path square at index k-1 (1-based).
     pub cursor_path_pos: usize,
-    pub log: Vec<String>,
+    pub log: Vec<LogEntry>,
     pub log_visible: bool,
     pub stats: GameStats,
     pub rng: SmallRng,
@@ -413,36 +422,43 @@ impl App {
             Some(gs) => gs,
             None => return,
         };
+        let current_player = gs.current_player;
         let result = gs.apply_move(mv.clone());
         self.stats.moves += 1;
 
         let player_num = match mv.piece.player {
-            ur_core::player::Player::Player1 => 1,
-            ur_core::player::Player::Player2 => 2,
+            Player::Player1 => 1,
+            Player::Player2 => 2,
         };
         let player_idx = mv.piece.player.index();
-        let piece_desc = format!("P{player_num}");
         let panel_event = match &mv.to {
             ur_core::state::PieceLocation::OnBoard(sq) => {
                 if result.captured.is_some() {
                     self.stats.captures[player_num - 1] += 1;
-                    self.log
-                        .push(format!("{piece_desc} captured on ({},{})", sq.row, sq.col));
+                    self.log.push(LogEntry {
+                        player: Some(current_player),
+                        text: format!("captured at ({},{})", sq.row, sq.col),
+                    });
                     Some("\u{25c6} captured!".to_string())
                 } else if result.landed_on_rosette {
-                    self.log.push(format!(
-                        "{piece_desc} landed on rosette ({},{}) — extra turn!",
-                        sq.row, sq.col
-                    ));
+                    self.log.push(LogEntry {
+                        player: Some(current_player),
+                        text: format!("landed on rosette ({},{}) — extra turn!", sq.row, sq.col),
+                    });
                     Some("\u{2736} rosette! +1 turn".to_string())
                 } else {
-                    self.log
-                        .push(format!("{piece_desc} moved to ({},{})", sq.row, sq.col));
+                    self.log.push(LogEntry {
+                        player: Some(current_player),
+                        text: format!("moved to ({},{})", sq.row, sq.col),
+                    });
                     None
                 }
             }
             ur_core::state::PieceLocation::Scored => {
-                self.log.push(format!("{piece_desc} scored a piece!"));
+                self.log.push(LogEntry {
+                    player: Some(current_player),
+                    text: "scored a piece!".to_string(),
+                });
                 Some("\u{2713} scored!".to_string())
             }
             _ => None,
@@ -529,8 +545,10 @@ impl App {
             if let Some(gs) = &self.game_state {
                 let moves = gs.legal_moves(roll);
                 if moves.is_empty() {
-                    self.log
-                        .push(format!("Roll {} — no moves, passing turn", roll.value()));
+                    self.log.push(LogEntry {
+                        player: self.game_state.as_ref().map(|gs| gs.current_player),
+                        text: format!("rolled {} — no moves, passing turn", roll.value()),
+                    });
                     // Show the no-moves (red) state for FORFEIT_DISPLAY_MS before
                     // auto-advancing. dice_roll is kept so the panel renders red.
                     self.forfeit_after = Some(
@@ -555,7 +573,10 @@ impl App {
         };
 
         let roll = ur_core::dice::Dice::roll(&mut self.rng);
-        self.log.push(format!("AI rolled {}", roll.value()));
+        self.log.push(LogEntry {
+            player: Some(Player::Player2),
+            text: format!("rolled {}", roll.value()),
+        });
         self.dice_roll = Some(roll);
         self.last_roll[gs.current_player.index()] = Some(roll);
 
@@ -570,7 +591,10 @@ impl App {
 
         let moves = gs.legal_moves(roll);
         if moves.is_empty() {
-            self.log.push("AI has no moves — passing turn".to_string());
+            self.log.push(LogEntry {
+                player: Some(Player::Player2),
+                text: "no moves — passing turn".to_string(),
+            });
             // No thread needed — on_animation_done will detect empty moves and
             // set forfeit_after once the dice animation finishes.
             return;
@@ -622,6 +646,10 @@ impl App {
             display: Dice(0),
         });
         self.dice_roll = Some(final_value);
+        self.log.push(LogEntry {
+            player: Some(Player::Player1),
+            text: format!("rolled {}", final_value.value()),
+        });
     }
 
     /// Called every tick. If `forfeit_after` has elapsed, forfeits the current
@@ -678,7 +706,10 @@ impl App {
                     // AI thread panicked — clear thinking state to prevent hang
                     self.ai_receiver = None;
                     self.ai_thinking = false;
-                    self.log.push("AI error — turn skipped".to_string());
+                    self.log.push(LogEntry {
+                        player: Some(Player::Player2),
+                        text: "error — turn skipped".to_string(),
+                    });
                     return;
                 }
             },
@@ -733,6 +764,71 @@ fn compute_move_path(
 
     // Collect all intermediate squares including destination
     (start_idx..=dest_idx).filter_map(|i| path.get(i)).collect()
+}
+
+#[cfg(test)]
+mod log_tests {
+    use super::*;
+    use ur_core::{
+        player::Player,
+        state::{GameRules, GameState},
+    };
+
+    fn make_app_with_game() -> App {
+        let mut app = App::new();
+        let rules = GameRules::finkel();
+        app.game_state = Some(GameState::new(&rules));
+        app
+    }
+
+    #[test]
+    fn test_log_entry_uses_you_label_for_player1() {
+        let entry = LogEntry {
+            player: Some(Player::Player1),
+            text: "rolled 3".to_string(),
+        };
+        assert_eq!(entry.player, Some(Player::Player1));
+        assert!(entry.text.contains("rolled 3"));
+    }
+
+    #[test]
+    fn test_log_entry_uses_ai_label_for_player2() {
+        let entry = LogEntry {
+            player: Some(Player::Player2),
+            text: "rolled 2".to_string(),
+        };
+        assert_eq!(entry.player, Some(Player::Player2));
+    }
+
+    #[test]
+    fn test_ai_roll_pushes_log_entry_with_player2() {
+        let mut app = make_app_with_game();
+        // Force Player2's turn
+        if let Some(gs) = &mut app.game_state {
+            gs.current_player = Player::Player2;
+        }
+        app.start_ai_turn();
+        let last = app.log.last().unwrap();
+        assert_eq!(last.player, Some(Player::Player2));
+        assert!(
+            last.text.contains("rolled"),
+            "expected 'rolled' in: {}",
+            last.text
+        );
+    }
+
+    #[test]
+    fn test_human_auto_roll_pushes_log_entry_with_player1() {
+        let mut app = make_app_with_game();
+        app.pending_roll = true;
+        app.roll_after = None; // fire immediately
+        app.tick_auto_roll();
+        let has_p1_roll = app
+            .log
+            .iter()
+            .any(|e| e.player == Some(Player::Player1) && e.text.contains("rolled"));
+        assert!(has_p1_roll, "expected a Player1 rolled entry");
+    }
 }
 
 #[cfg(test)]

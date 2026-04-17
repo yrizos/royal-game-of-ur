@@ -818,7 +818,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         status_area,
         app.stats.moves,
         elapsed,
-        app.log.last().map(|s| s.as_str()),
+        app.log.last().map(|e| e.text.as_str()),
         app.log_visible,
         app.ai_thinking,
         app.ai_spinner_frame,
@@ -831,7 +831,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
 }
 
 /// Renders a floating log overlay over the gameplay screen.
-fn render_log_overlay(f: &mut Frame, area: Rect, log: &[String]) {
+fn render_log_overlay(f: &mut Frame, area: Rect, log: &[crate::app::LogEntry]) {
     use ratatui::widgets::{List, ListItem};
     let overlay = Rect::new(
         area.x + area.width / 4,
@@ -845,7 +845,7 @@ fn render_log_overlay(f: &mut Frame, area: Rect, log: &[String]) {
     let items: Vec<ListItem> = log
         .iter()
         .rev()
-        .map(|e| ListItem::new(e.as_str()))
+        .map(|e| ListItem::new(e.text.as_str()))
         .collect();
     let list = List::new(items).block(block);
     f.render_widget(ratatui::widgets::Clear, overlay);
