@@ -83,6 +83,8 @@ pub fn tick_animation(anim: &mut Animation) {
 
 /// Advance app animations and handle post-animation transitions.
 pub fn tick(app: &mut App) {
+    app.frame_count = app.frame_count.wrapping_add(1);
+
     // Advance active animation
     if let Some(anim) = &mut app.animation {
         tick_animation(anim);

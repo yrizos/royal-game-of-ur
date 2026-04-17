@@ -104,6 +104,9 @@ pub struct App {
     pub last_roll: [Option<Dice>; 2],
     /// Last notable event per player (capture / rosette / score). Shown below dice.
     pub last_event: [Option<String>; 2],
+    /// Monotonically increasing counter, incremented every animation tick. Used to
+    /// drive UI animations (e.g. rolling dice pattern) independently of game state.
+    pub frame_count: u32,
 }
 
 impl App {
@@ -132,6 +135,7 @@ impl App {
             rosette_reroll: false,
             last_roll: [None, None],
             last_event: [None, None],
+            frame_count: 0,
         }
     }
 
@@ -514,6 +518,11 @@ impl App {
         if self.dice_roll.is_none() {
             return;
         }
+        // If the AI is still computing, the dice-roll animation has finished but the
+        // chosen move isn't ready yet. Let poll_ai_move handle the transition.
+        if self.ai_thinking {
+            return;
+        }
         if let Some(roll) = self.dice_roll {
             if let Some(gs) = &self.game_state {
                 let moves = gs.legal_moves(roll);
@@ -545,16 +554,23 @@ impl App {
 
         let roll = ur_core::dice::Dice::roll(&mut self.rng);
         self.log.push(format!("AI rolled {}", roll.value()));
-        // Always show the AI's roll in its panel (during thinking and for no-moves).
         self.dice_roll = Some(roll);
-        self.last_roll[1] = Some(roll);
+        self.last_roll[gs.current_player.index()] = Some(roll);
+
+        // Play the same dice-roll animation as the human so the AI turn is
+        // visually consistent. The AI computation thread (if any) starts in
+        // parallel and poll_ai_move will wait for the animation to finish.
+        self.animation = Some(Animation::DiceRoll {
+            frames_remaining: DICE_ROLL_ANIMATION_FRAMES,
+            final_value: roll,
+            display: ur_core::dice::Dice(0),
+        });
 
         let moves = gs.legal_moves(roll);
         if moves.is_empty() {
             self.log.push("AI has no moves — passing turn".to_string());
-            self.forfeit_after = Some(
-                std::time::Instant::now() + std::time::Duration::from_millis(FORFEIT_DISPLAY_MS),
-            );
+            // No thread needed — on_animation_done will detect empty moves and
+            // set forfeit_after once the dice animation finishes.
             return;
         }
 
@@ -647,6 +663,11 @@ impl App {
     /// Polls the AI move channel (non-blocking). If a result is ready, clears
     /// the thinking state and applies the move.
     pub fn poll_ai_move(&mut self) {
+        // Wait for the dice-roll animation to finish before applying the move so
+        // the player sees the full roll before pieces start moving.
+        if matches!(self.animation, Some(Animation::DiceRoll { .. })) {
+            return;
+        }
         let mv = match self.ai_receiver.as_ref() {
             Some(rx) => match rx.try_recv() {
                 Ok(m) => m,

@@ -29,10 +29,10 @@ const COLOR_TARGET_BG: Color = Color::Rgb(40, 20, 60);
 pub enum PanelDice {
     /// Nothing to show (panel is inactive and no prior roll to display).
     Hidden,
-    /// Auto-roll is queued; waiting for the delay to elapse.
-    Pending,
-    /// Dice roll animation is in progress; carries the current cycling display value.
-    Animating(Dice),
+    /// Auto-roll is queued; waiting for the delay to elapse (carry a tick counter for animation).
+    Pending(u32),
+    /// Dice roll animation is in progress; carries `frames_remaining` for the rolling pattern.
+    Animating(u32),
     /// Roll landed with legal moves available; carries the final value.
     Result(Dice),
     /// Roll landed with no legal moves; displayed in red before auto-forfeit.
@@ -77,6 +77,54 @@ fn dice_box_lines(value: u8, color: Color, dim: bool) -> Vec<Line<'static>> {
         }
         mid_spans.push(Span::styled("│", border));
 
+        if i < 3 {
+            top_spans.push(Span::raw(" "));
+            mid_spans.push(Span::raw(" "));
+            bot_spans.push(Span::raw(" "));
+        }
+    }
+
+    vec![
+        Line::from(top_spans),
+        Line::from(mid_spans),
+        Line::from(bot_spans),
+    ]
+}
+
+/// Renders four dice boxes with a rapidly cycling pip pattern to convey rolling.
+///
+/// Each die independently toggles between filled and empty on a different phase
+/// so the dice visibly churn even when the overall count hasn't settled. The
+/// `frame` argument is `frames_remaining` from the animation state — it counts
+/// down from a positive value to 1, giving fresh input every tick.
+fn dice_rolling_lines(frame: u32, color: Color) -> Vec<Line<'static>> {
+    // 4-bit bitmasks: bit i set ⟹ die i shows a filled pip.
+    // The 16-entry table cycles at 2 frames per pattern (~66 ms at 30 fps),
+    // giving a fast random-looking churn across all four dice.
+    const PATTERNS: [u8; 16] = [
+        0b1010, 0b0101, 0b1100, 0b0011, 0b1001, 0b0110, 0b1111, 0b0000, 0b1110, 0b0111, 0b1011,
+        0b1101, 0b0001, 0b1000, 0b0100, 0b0010,
+    ];
+    let pattern = PATTERNS[((frame / 2) as usize) % PATTERNS.len()];
+
+    let border = Style::default().fg(color);
+    let mut top_spans = vec![Span::raw("  ")];
+    let mut mid_spans = vec![Span::raw("  ")];
+    let mut bot_spans = vec![Span::raw("  ")];
+
+    for i in 0..4u8 {
+        top_spans.push(Span::styled("┌───┐", border));
+        bot_spans.push(Span::styled("└───┘", border));
+        mid_spans.push(Span::styled("│", border));
+        if (pattern >> i) & 1 == 1 {
+            mid_spans.push(Span::styled(
+                " ● ",
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ));
+        } else {
+            mid_spans.push(Span::styled("   ", Style::default().fg(Color::DarkGray)));
+        }
+        mid_spans.push(Span::styled("│", border));
         if i < 3 {
             top_spans.push(Span::raw(" "));
             mid_spans.push(Span::raw(" "));
@@ -474,16 +522,17 @@ pub fn render_player_panel(
     // Dice widget
     match panel_dice {
         PanelDice::Hidden => {}
-        PanelDice::Pending => {
+        PanelDice::Pending(frame) => {
             text.push(Line::from(""));
+            text.extend(dice_rolling_lines(frame, color));
             text.push(Line::from(Span::styled(
                 "  rolling...",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(color).add_modifier(Modifier::DIM),
             )));
         }
-        PanelDice::Animating(display) => {
+        PanelDice::Animating(frame) => {
             text.push(Line::from(""));
-            text.extend(dice_box_lines(display.value(), color, false));
+            text.extend(dice_rolling_lines(frame, color));
             text.push(Line::from(Span::styled(
                 "  = ?",
                 Style::default().fg(Color::DarkGray),
@@ -569,11 +618,11 @@ fn compute_panel_dice(app: &crate::app::App, player: Player) -> PanelDice {
             return PanelDice::RosettePending;
         }
         if app.pending_roll {
-            return PanelDice::Pending;
+            return PanelDice::Pending(app.frame_count);
         }
         if let Some(roll) = app.dice_roll {
-            if let Some(crate::animation::Animation::DiceRoll { display, .. }) = &app.animation {
-                return PanelDice::Animating(*display);
+            if let Some(crate::animation::Animation::DiceRoll { .. }) = &app.animation {
+                return PanelDice::Animating(app.frame_count);
             }
             if app.forfeit_after.is_some() {
                 return PanelDice::NoMoves(roll);
@@ -841,8 +890,8 @@ mod tests {
         app.pending_roll = true;
         let result = compute_panel_dice(&app, Player::Player1);
         assert!(
-            matches!(result, PanelDice::Pending),
-            "expected Pending, got {:?}",
+            matches!(result, PanelDice::Pending(_)),
+            "expected Pending(_), got {:?}",
             result
         );
     }
@@ -859,8 +908,8 @@ mod tests {
         });
         let result = compute_panel_dice(&app, Player::Player1);
         assert!(
-            matches!(result, PanelDice::Animating(Dice(2))),
-            "expected Animating(Dice(2)), got {:?}",
+            matches!(result, PanelDice::Animating(_)),
+            "expected Animating(_), got {:?}",
             result
         );
     }
