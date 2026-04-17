@@ -53,7 +53,7 @@ pub fn map_key(key: KeyEvent, screen: &Screen) -> Option<Action> {
             KeyCode::Down | KeyCode::Char('j') | KeyCode::Left | KeyCode::Char('h') => {
                 Some(Action::SelectPrev)
             }
-            KeyCode::Enter => Some(Action::ConfirmMove),
+            KeyCode::Enter | KeyCode::Char(' ') => Some(Action::ConfirmMove),
             KeyCode::Char('l') => Some(Action::ToggleLog),
             KeyCode::Esc => Some(Action::QuitPrompt),
             _ => None,
@@ -91,9 +91,9 @@ mod tests {
     }
 
     #[test]
-    fn test_space_in_game_returns_none_after_roll_removed() {
+    fn test_space_in_game_maps_to_confirm_move() {
         let action = map_key(key(KeyCode::Char(' ')), &crate::app::Screen::Game);
-        assert_eq!(action, None);
+        assert_eq!(action, Some(Action::ConfirmMove));
     }
 
     #[test]
