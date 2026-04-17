@@ -546,7 +546,7 @@ impl App {
                 let moves = gs.legal_moves(roll);
                 if moves.is_empty() {
                     self.log.push(LogEntry {
-                        player: self.game_state.as_ref().map(|gs| gs.current_player),
+                        player: Some(gs.current_player),
                         text: format!("rolled {} — no moves, passing turn", roll.value()),
                     });
                     // Show the no-moves (red) state for FORFEIT_DISPLAY_MS before
