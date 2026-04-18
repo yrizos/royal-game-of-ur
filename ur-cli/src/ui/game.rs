@@ -878,26 +878,54 @@ pub fn render_game(f: &mut Frame, app: &App) {
     }
 }
 
-/// Renders a floating log overlay over the gameplay screen.
+/// Renders a floating log overlay using StyledBox — padding and borders consistent
+/// with the help modal.
 fn render_log_overlay(f: &mut Frame, area: Rect, log: &[crate::app::LogEntry]) {
-    use ratatui::widgets::{List, ListItem};
+    use crate::ui::styled_box::StyledBox;
+    use ratatui::widgets::{Clear, List, ListItem};
+
     let overlay = Rect::new(
         area.x + area.width / 4,
         area.y + 2,
         area.width / 2,
         area.height.saturating_sub(4),
     );
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .title(" Game Log [L to close] ");
+
+    f.render_widget(Clear, overlay);
+
+    let scroll_hint = " [L] close ".to_string();
+
+    let sb = StyledBox {
+        title: "Game Log",
+        border_color: Color::Yellow,
+        bottom_title: Some(scroll_hint),
+    };
+    let content = sb.render(f, overlay);
+
     let items: Vec<ListItem> = log
         .iter()
         .rev()
-        .map(|e| ListItem::new(e.text.as_str()))
+        .map(|entry| {
+            let (prefix, prefix_style) = match entry.player {
+                Some(p) if p == ur_core::player::Player::Player1 => (
+                    "You  ",
+                    Style::default().fg(COLOR_P1).add_modifier(Modifier::BOLD),
+                ),
+                Some(_) => (
+                    "AI   ",
+                    Style::default().fg(COLOR_P2).add_modifier(Modifier::BOLD),
+                ),
+                None => ("     ", Style::default().fg(Color::DarkGray)),
+            };
+            let line = Line::from(vec![
+                Span::styled(prefix, prefix_style),
+                Span::styled(entry.text.clone(), Style::default().fg(Color::Gray)),
+            ]);
+            ListItem::new(line)
+        })
         .collect();
-    let list = List::new(items).block(block);
-    f.render_widget(ratatui::widgets::Clear, overlay);
-    f.render_widget(list, overlay);
+
+    f.render_widget(List::new(items), content);
 }
 
 #[cfg(test)]
@@ -910,6 +938,33 @@ mod tests {
         player::Player,
         state::{GameRules, GameState},
     };
+
+    #[test]
+    fn test_render_log_overlay_does_not_panic_with_entries() {
+        use crate::app::LogEntry;
+        use ratatui::{backend::TestBackend, Terminal};
+
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let log = vec![
+            LogEntry {
+                player: Some(Player::Player1),
+                text: "rolled 3".to_string(),
+            },
+            LogEntry {
+                player: Some(Player::Player2),
+                text: "captured".to_string(),
+            },
+            LogEntry {
+                player: None,
+                text: "system event".to_string(),
+            },
+        ];
+        terminal
+            .draw(|f| {
+                render_log_overlay(f, f.size(), &log);
+            })
+            .unwrap();
+    }
 
     fn make_app_with_game() -> App {
         let mut app = App::new();
