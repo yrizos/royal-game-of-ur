@@ -15,23 +15,25 @@ pub struct StyledBox<'a> {
     pub title: &'a str,
     /// Border and title colour.
     pub border_color: Color,
-    /// Optional text shown in the bottom border (used for scroll hints).
-    pub bottom_title: Option<String>,
+    /// When true, renders a scroll indicator in the bottom border.
+    pub scrollable: bool,
 }
 
 impl<'a> StyledBox<'a> {
     /// Render the box into `area`, clear the area, and return the inner `Rect`
     /// with 1 char of padding removed on every side beyond the border.
     pub fn render(self, f: &mut Frame, area: Rect) -> Rect {
-        let title_style = Style::default().fg(self.border_color).add_modifier(Modifier::BOLD);
+        let title_style = Style::default()
+            .fg(self.border_color)
+            .add_modifier(Modifier::BOLD);
         let mut block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(self.border_color))
             .title(Span::styled(format!(" {} ", self.title), title_style));
 
-        if let Some(ref bt) = self.bottom_title {
+        if self.scrollable {
             block = block.title_bottom(Span::styled(
-                bt.clone(),
+                " ↑↓ scroll ",
                 Style::default().fg(Color::DarkGray),
             ));
         }
@@ -67,7 +69,7 @@ mod tests {
                 let sb = StyledBox {
                     title: "Test",
                     border_color: Color::Yellow,
-                    bottom_title: None,
+                    scrollable: false,
                 };
                 let content = sb.render(f, area);
                 // border=1, padding=1 on each side → content starts at (2,2)
@@ -82,7 +84,7 @@ mod tests {
     }
 
     #[test]
-    fn test_styled_box_with_bottom_title_does_not_panic() {
+    fn test_scrollable_shows_scroll_indicator() {
         let mut terminal = make_terminal(30, 8);
         terminal
             .draw(|f| {
@@ -90,7 +92,7 @@ mod tests {
                 let sb = StyledBox {
                     title: "Log",
                     border_color: Color::Yellow,
-                    bottom_title: Some(" ↑↓ scroll (1/5) ".to_string()),
+                    scrollable: true,
                 };
                 let content = sb.render(f, area);
                 assert_eq!(content.x, 2);
@@ -108,7 +110,7 @@ mod tests {
                 let sb = StyledBox {
                     title: "X",
                     border_color: Color::Red,
-                    bottom_title: None,
+                    scrollable: false,
                 };
                 let content = sb.render(f, area);
                 // Should not panic; width/height saturate at 0.

@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Widget},
+    widgets::{Paragraph, Widget},
     Frame,
 };
 use ur_core::{
@@ -540,7 +540,7 @@ pub fn render_player_panel(
     let sb = StyledBox {
         title: &title,
         border_color,
-        bottom_title: None,
+        scrollable: false,
     };
     let inner = sb.render(f, area);
 
@@ -893,12 +893,10 @@ fn render_log_overlay(f: &mut Frame, area: Rect, log: &[crate::app::LogEntry]) {
 
     f.render_widget(Clear, overlay);
 
-    let scroll_hint = " [L] close ".to_string();
-
     let sb = StyledBox {
         title: "Game Log",
         border_color: Color::Yellow,
-        bottom_title: Some(scroll_hint),
+        scrollable: true,
     };
     let content = sb.render(f, overlay);
 
@@ -907,7 +905,7 @@ fn render_log_overlay(f: &mut Frame, area: Rect, log: &[crate::app::LogEntry]) {
         .rev()
         .map(|entry| {
             let (prefix, prefix_style) = match entry.player {
-                Some(p) if p == ur_core::player::Player::Player1 => (
+                Some(ur_core::player::Player::Player1) => (
                     "You  ",
                     Style::default().fg(COLOR_P1).add_modifier(Modifier::BOLD),
                 ),
