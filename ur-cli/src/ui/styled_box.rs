@@ -1,6 +1,6 @@
 use ratatui::{
     layout::Rect,
-    style::{Color, Style},
+    style::{Color, Modifier, Style},
     text::Span,
     widgets::{Block, Borders},
     Frame,
@@ -23,7 +23,7 @@ impl<'a> StyledBox<'a> {
     /// Render the box into `area`, clear the area, and return the inner `Rect`
     /// with 1 char of padding removed on every side beyond the border.
     pub fn render(self, f: &mut Frame, area: Rect) -> Rect {
-        let title_style = Style::default().fg(self.border_color);
+        let title_style = Style::default().fg(self.border_color).add_modifier(Modifier::BOLD);
         let mut block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(self.border_color))
