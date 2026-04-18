@@ -555,10 +555,9 @@ pub fn render_player_panel(
             Constraint::Length(1), // [3] roll label
             Constraint::Length(1), // [4] pick-a-move prompt
             Constraint::Min(2),    // [5] turn log (grows with available space)
-            Constraint::Length(1), // [6] divider
-            Constraint::Length(1), // [7] scored
-            Constraint::Length(1), // [8] pool
-            Constraint::Length(1), // [9] captures
+            Constraint::Length(1), // [6] scored
+            Constraint::Length(1), // [7] pool
+            Constraint::Length(1), // [8] captures
         ])
         .split(inner);
 
@@ -615,14 +614,7 @@ pub fn render_player_panel(
         f.render_widget(List::new(items), sections[5]);
     }
 
-    // [6] Divider
-    f.render_widget(
-        Paragraph::new("\u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}  \u{00b7}")
-            .style(Style::default().fg(Color::DarkGray)),
-        sections[6],
-    );
-
-    // [7] Scored dots
+    // [6] Scored dots
     let scored_str = if scored == 0 {
         String::new()
     } else {
@@ -631,10 +623,10 @@ pub fn render_player_panel(
     };
     f.render_widget(
         Paragraph::new(format!("Scored  {}", scored_str)).style(Style::default().fg(color)),
-        sections[7],
+        sections[6],
     );
 
-    // [8] Pool dots
+    // [7] Pool dots
     let pool_str = if unplayed == 0 {
         String::new()
     } else {
@@ -644,13 +636,13 @@ pub fn render_player_panel(
     f.render_widget(
         Paragraph::new(format!("Pool    {}", pool_str))
             .style(Style::default().fg(color).add_modifier(Modifier::DIM)),
-        sections[8],
+        sections[7],
     );
 
-    // [9] Captures
+    // [8] Captures
     f.render_widget(
         Paragraph::new(format!("Captures: {}", captures)).style(Style::default().fg(Color::Gray)),
-        sections[9],
+        sections[8],
     );
 }
 
