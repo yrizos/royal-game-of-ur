@@ -447,11 +447,20 @@ impl App {
                     });
                     Some("\u{2736} rosette! +1 turn".to_string())
                 } else {
+                    let step = result
+                        .new_state
+                        .rules
+                        .path_for(mv.piece.player)
+                        .squares()
+                        .iter()
+                        .position(|&s| s == *sq)
+                        .map(|i| i + 1)
+                        .unwrap_or(0);
                     self.log.push(LogEntry {
                         player: Some(current_player),
-                        text: format!("moved to ({},{})", sq.row, sq.col),
+                        text: format!("moved to step {}", step),
                     });
-                    None
+                    Some(format!("\u{2192} step {}", step))
                 }
             }
             ur_core::state::PieceLocation::Scored => {
