@@ -99,6 +99,12 @@ mod tests {
                 assert_eq!(content.y, 2);
             })
             .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let content: String = buffer.content().iter().map(|c| c.symbol()).collect();
+        assert!(
+            content.contains("↑↓ scroll"),
+            "scroll indicator must appear in buffer"
+        );
     }
 
     #[test]

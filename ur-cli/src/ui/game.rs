@@ -905,11 +905,11 @@ fn render_log_overlay(f: &mut Frame, area: Rect, log: &[crate::app::LogEntry]) {
         .rev()
         .map(|entry| {
             let (prefix, prefix_style) = match entry.player {
-                Some(ur_core::player::Player::Player1) => (
+                Some(Player::Player1) => (
                     "You  ",
                     Style::default().fg(COLOR_P1).add_modifier(Modifier::BOLD),
                 ),
-                Some(_) => (
+                Some(Player::Player2) => (
                     "AI   ",
                     Style::default().fg(COLOR_P2).add_modifier(Modifier::BOLD),
                 ),
@@ -942,7 +942,7 @@ mod tests {
         use crate::app::LogEntry;
         use ratatui::{backend::TestBackend, Terminal};
 
-        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        let mut terminal = Terminal::new(TestBackend::new(60, 20)).unwrap();
         let log = vec![
             LogEntry {
                 player: Some(Player::Player1),
@@ -962,6 +962,16 @@ mod tests {
                 render_log_overlay(f, f.size(), &log);
             })
             .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let content: String = buffer.content().iter().map(|c| c.symbol()).collect();
+        assert!(
+            content.contains("You"),
+            "Player1 log entry must render 'You' prefix"
+        );
+        assert!(
+            content.contains("AI"),
+            "Player2 log entry must render 'AI' prefix"
+        );
     }
 
     fn make_app_with_game() -> App {
