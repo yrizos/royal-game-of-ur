@@ -520,7 +520,8 @@ pub fn render_player_panel(
     unplayed: u8,
     scored: u8,
     panel_dice: PanelDice,
-    event_msg: Option<&str>,
+    _event_msg: Option<&str>,
+    turn_log: &[String],
 ) {
     use crate::ui::styled_box::StyledBox;
 
@@ -544,7 +545,7 @@ pub fn render_player_panel(
     };
     let inner = sb.render(f, area);
 
-    // Fixed-height sections — order and heights never change.
+    // Fixed-height sections — dice/stats are fixed; turn log grows to fill space.
     let sections = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -552,14 +553,12 @@ pub fn render_player_panel(
             Constraint::Length(1), // [1] blank
             Constraint::Length(3), // [2] dice boxes (3 rows)
             Constraint::Length(1), // [3] roll label
-            Constraint::Length(2), // [4] turn summary (2 lines, always reserved)
-            Constraint::Length(1), // [5] blank
+            Constraint::Length(1), // [4] pick-a-move prompt
+            Constraint::Min(2),    // [5] turn log (grows with available space)
             Constraint::Length(1), // [6] divider
-            Constraint::Length(1), // [7] blank
-            Constraint::Length(1), // [8] scored
-            Constraint::Length(1), // [9] pool
-            Constraint::Length(1), // [10] captures
-            Constraint::Min(0),    // [11] overflow
+            Constraint::Length(1), // [7] scored
+            Constraint::Length(1), // [8] pool
+            Constraint::Length(1), // [9] captures
         ])
         .split(inner);
 
@@ -586,29 +585,35 @@ pub fn render_player_panel(
     let label_line = dice_label_line(panel_dice, color);
     f.render_widget(Paragraph::new(vec![label_line]), sections[3]);
 
-    // [4] Turn summary — always exactly 2 lines
-    let mut summary: Vec<Line<'static>> = Vec::with_capacity(2);
-    if let Some(msg) = event_msg {
-        summary.push(Line::from(Span::styled(
-            msg.to_string(),
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )));
-    } else {
-        summary.push(Line::from(""));
-    }
-    if matches!(panel_dice, PanelDice::Result(_)) && is_human {
-        summary.push(Line::from(Span::styled(
+    // [4] Pick-a-move prompt (1 line)
+    let prompt = if matches!(panel_dice, PanelDice::Result(_)) && is_human {
+        Span::styled(
             "\u{25b6} pick a move",
             Style::default()
                 .fg(Color::Green)
                 .add_modifier(Modifier::BOLD),
-        )));
+        )
     } else {
-        summary.push(Line::from(""));
+        Span::raw("")
+    };
+    f.render_widget(Paragraph::new(Line::from(prompt)), sections[4]);
+
+    // [5] Turn log — shows all events this turn (roll, moves, captures, etc.)
+    {
+        use ratatui::widgets::{List, ListItem};
+        let available = sections[5].height as usize;
+        let skip = turn_log.len().saturating_sub(available);
+        let items: Vec<ListItem> = turn_log[skip..]
+            .iter()
+            .map(|line| {
+                ListItem::new(Span::styled(
+                    line.clone(),
+                    Style::default().fg(Color::White),
+                ))
+            })
+            .collect();
+        f.render_widget(List::new(items), sections[5]);
     }
-    f.render_widget(Paragraph::new(summary), sections[4]);
 
     // [6] Divider
     f.render_widget(
@@ -617,7 +622,7 @@ pub fn render_player_panel(
         sections[6],
     );
 
-    // [8] Scored dots
+    // [7] Scored dots
     let scored_str = if scored == 0 {
         String::new()
     } else {
@@ -626,10 +631,10 @@ pub fn render_player_panel(
     };
     f.render_widget(
         Paragraph::new(format!("Scored  {}", scored_str)).style(Style::default().fg(color)),
-        sections[8],
+        sections[7],
     );
 
-    // [9] Pool dots
+    // [8] Pool dots
     let pool_str = if unplayed == 0 {
         String::new()
     } else {
@@ -639,13 +644,13 @@ pub fn render_player_panel(
     f.render_widget(
         Paragraph::new(format!("Pool    {}", pool_str))
             .style(Style::default().fg(color).add_modifier(Modifier::DIM)),
-        sections[9],
+        sections[8],
     );
 
-    // [10] Captures
+    // [9] Captures
     f.render_widget(
         Paragraph::new(format!("Captures: {}", captures)).style(Style::default().fg(Color::Gray)),
-        sections[10],
+        sections[9],
     );
 }
 
@@ -792,6 +797,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         game_state.scored[0],
         compute_panel_dice(app, Player::Player1),
         app.last_event[0].as_deref(),
+        &app.turn_log[0],
     );
     render_player_panel(
         f,
@@ -804,6 +810,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         game_state.scored[1],
         compute_panel_dice(app, Player::Player2),
         app.last_event[1].as_deref(),
+        &app.turn_log[1],
     );
 
     // Column headers centered above each board column
@@ -1125,6 +1132,40 @@ mod tests {
             content.trim().is_empty(),
             "hidden dice label should be blank, got: {:?}",
             content
+        );
+    }
+
+    #[test]
+    fn test_render_player_panel_shows_event_msg_in_buffer() {
+        use ratatui::{backend::TestBackend, Terminal};
+        let backend = TestBackend::new(40, 30);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal
+            .draw(|f| {
+                render_player_panel(
+                    f,
+                    f.size(),
+                    Player::Player1,
+                    true,
+                    false,
+                    0,
+                    7,
+                    0,
+                    PanelDice::LastRoll(Dice(3)),
+                    Some("captured!"),
+                    &["rolled 3".to_string(), "◆ captured at step 10".to_string()],
+                );
+            })
+            .unwrap();
+        let buffer = terminal.backend().buffer().clone();
+        let content: String = buffer.content().iter().map(|c| c.symbol()).collect();
+        assert!(
+            content.contains("rolled 3"),
+            "turn_log entry 'rolled 3' must appear in rendered panel"
+        );
+        assert!(
+            content.contains("captured at step 10"),
+            "turn_log entry 'captured at step 10' must appear in rendered panel"
         );
     }
 }

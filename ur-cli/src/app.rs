@@ -114,6 +114,9 @@ pub struct App {
     pub last_roll: [Option<Dice>; 2],
     /// Last notable event per player (capture / rosette / score). Shown below dice.
     pub last_event: [Option<String>; 2],
+    /// All events that occurred during the current turn, per player.
+    /// Cleared at the start of each new turn (rosette re-rolls extend the same turn).
+    pub turn_log: [Vec<String>; 2],
     /// Monotonically increasing counter, incremented every animation tick. Used to
     /// drive UI animations (e.g. rolling dice pattern) independently of game state.
     pub frame_count: u32,
@@ -145,6 +148,7 @@ impl App {
             rosette_reroll: false,
             last_roll: [None, None],
             last_event: [None, None],
+            turn_log: [Vec::new(), Vec::new()],
             frame_count: 0,
         }
     }
@@ -197,6 +201,7 @@ impl App {
         self.ai_spinner_frame = 0;
         self.last_roll = [None, None];
         self.last_event = [None, None];
+        self.turn_log = [Vec::new(), Vec::new()];
         self.rosette_reroll = false;
         self.forfeit_after = None;
         self.screen = Screen::Game;
@@ -433,34 +438,40 @@ impl App {
         let player_idx = mv.piece.player.index();
         let panel_event = match &mv.to {
             ur_core::state::PieceLocation::OnBoard(sq) => {
+                let step = result
+                    .new_state
+                    .rules
+                    .path_for(mv.piece.player)
+                    .squares()
+                    .iter()
+                    .position(|&s| s == *sq)
+                    .map(|i| i + 1)
+                    .unwrap_or(0);
                 if result.captured.is_some() {
                     self.stats.captures[player_num - 1] += 1;
                     self.log.push(LogEntry {
                         player: Some(current_player),
-                        text: format!("captured at ({},{})", sq.row, sq.col),
+                        text: format!("captured at step {}", step),
                     });
-                    Some("\u{25c6} captured!".to_string())
+                    let t = format!("\u{25c6} captured at step {}", step);
+                    self.turn_log[player_idx].push(t.clone());
+                    Some(t)
                 } else if result.landed_on_rosette {
                     self.log.push(LogEntry {
                         player: Some(current_player),
-                        text: format!("landed on rosette ({},{}) — extra turn!", sq.row, sq.col),
+                        text: format!("rosette at step {} — extra turn!", step),
                     });
-                    Some("\u{2736} rosette! +1 turn".to_string())
+                    let t = format!("\u{2736} rosette at step {} — bonus turn", step);
+                    self.turn_log[player_idx].push(t.clone());
+                    Some(t)
                 } else {
-                    let step = result
-                        .new_state
-                        .rules
-                        .path_for(mv.piece.player)
-                        .squares()
-                        .iter()
-                        .position(|&s| s == *sq)
-                        .map(|i| i + 1)
-                        .unwrap_or(0);
                     self.log.push(LogEntry {
                         player: Some(current_player),
                         text: format!("moved to step {}", step),
                     });
-                    Some(format!("\u{2192} step {}", step))
+                    let t = format!("\u{2192} step {}", step);
+                    self.turn_log[player_idx].push(t.clone());
+                    Some(t)
                 }
             }
             ur_core::state::PieceLocation::Scored => {
@@ -468,7 +479,9 @@ impl App {
                     player: Some(current_player),
                     text: "scored a piece!".to_string(),
                 });
-                Some("\u{2713} scored!".to_string())
+                let t = "\u{2713} scored!".to_string();
+                self.turn_log[player_idx].push(t.clone());
+                Some(t)
             }
             _ => None,
         };
@@ -558,6 +571,8 @@ impl App {
                         player: Some(gs.current_player),
                         text: format!("rolled {} — no moves, passing turn", roll.value()),
                     });
+                    self.turn_log[gs.current_player.index()]
+                        .push("no moves — passing turn".to_string());
                     // Show the no-moves (red) state for FORFEIT_DISPLAY_MS before
                     // auto-advancing. dice_roll is kept so the panel renders red.
                     self.forfeit_after = Some(
@@ -587,6 +602,10 @@ impl App {
             text: format!("rolled {}", roll.value()),
         });
         self.dice_roll = Some(roll);
+        if !self.rosette_reroll {
+            self.turn_log[1].clear();
+        }
+        self.turn_log[1].push(format!("rolled {}", roll.value()));
         self.last_roll[gs.current_player.index()] = Some(roll);
 
         // Play the same dice-roll animation as the human so the AI turn is
@@ -645,6 +664,7 @@ impl App {
         if !ready {
             return;
         }
+        let is_rosette_reroll = self.rosette_reroll;
         self.pending_roll = false;
         self.rosette_reroll = false;
         self.roll_after = None;
@@ -659,6 +679,10 @@ impl App {
             player: Some(Player::Player1),
             text: format!("rolled {}", final_value.value()),
         });
+        if !is_rosette_reroll {
+            self.turn_log[0].clear();
+        }
+        self.turn_log[0].push(format!("rolled {}", final_value.value()));
     }
 
     /// Called every tick. If `forfeit_after` has elapsed, forfeits the current
