@@ -52,7 +52,7 @@ pub fn render_pause_menu(f: &mut Frame, selected: usize) {
 
 fn h(s: &'static str) -> Line<'static> {
     Line::from(Span::styled(
-        format!("  {s}"),
+        s.to_string(),
         Style::default()
             .fg(Color::Yellow)
             .add_modifier(Modifier::BOLD),
@@ -65,7 +65,7 @@ fn p(s: &'static str) -> Line<'static> {
 
 fn key(k: &'static str, desc: &'static str) -> Line<'static> {
     Line::from(vec![
-        Span::styled(format!("  {k:<14}"), Style::default().fg(Color::Cyan)),
+        Span::styled(format!("{k:<14}"), Style::default().fg(Color::Cyan)),
         Span::raw(desc),
     ])
 }
@@ -322,7 +322,7 @@ fn flow_board() -> Board {
 // ── Help content ─────────────────────────────────────────────────────────────
 
 fn help_lines() -> Vec<Line<'static>> {
-    let ind = "  ";
+    let ind = " ";
     let gap = "          "; // 10-char gap between dual boards
     let mut lines = Vec::with_capacity(150);
 
@@ -331,27 +331,27 @@ fn help_lines() -> Vec<Line<'static>> {
 
     // ── Introduction (no section title — flows from the top) ─────────────
     lines.push(p(
-        "  One of the oldest known board games, dating to about 2600 BCE in",
+        "One of the oldest known board games, dating to about 2600 BCE in",
     ));
     lines.push(p(
-        "  ancient Mesopotamia. Sets were excavated from the Royal Tombs of",
+        "ancient Mesopotamia. Sets were excavated from the Royal Tombs of",
     ));
     lines.push(p(
-        "  Ur (modern-day Iraq) by Sir Leonard Woolley in the 1920s.",
-    ));
-    lines.push(p(""));
-    lines.push(p(
-        "  These rules follow Irving Finkel's reconstruction at the British",
-    ));
-    lines.push(p(
-        "  Museum, based on a cuneiform tablet from around 177 BCE.",
+        "Ur (modern-day Iraq) by Sir Leonard Woolley in the 1920s.",
     ));
     lines.push(p(""));
     lines.push(p(
-        "  Objective: race all 7 pieces through a 14-step path and off the",
+        "These rules follow Irving Finkel's reconstruction at the British",
+    ));
+    lines.push(p(
+        "Museum, based on a cuneiform tablet from around 177 BCE.",
+    ));
+    lines.push(p(""));
+    lines.push(p(
+        "Objective: race all 7 pieces through a 14-step path and off the",
     ));
     lines.push(Line::from(vec![
-        Span::raw("  board before the AI. "),
+        Span::raw("board before the AI. "),
         Span::styled("SPACE", Style::default().fg(Color::Cyan)),
         Span::raw(" roll \u{2192} \u{2191}\u{2193} select piece \u{2192} "),
         Span::styled("ENTER", Style::default().fg(Color::Cyan)),
@@ -363,17 +363,15 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(h("YOUR PATH (14 steps \u{2192} exit)"));
     lines.push(p(""));
     lines.push(p(
-        "  Steps 1\u{2013}4 your private lane (left). Steps 5\u{2013}12 the shared",
+        "Steps 1\u{2013}4 your private lane (left). Steps 5\u{2013}12 the shared",
     ));
     lines.push(p(
-        "  column (both players!). Steps 13\u{2013}14 your exit lane (left).",
+        "column (both players!). Steps 13\u{2013}14 your exit lane (left).",
     ));
     lines.push(p(
-        "  \u{2726} = Rosette: extra turn + safe. Must roll exactly to exit.",
+        "\u{2726} = Rosette: extra turn + safe. Must roll exactly to exit.",
     ));
-    lines.push(p(
-        "  The AI\u{2019}s path mirrors yours on the right column.",
-    ));
+    lines.push(p("The AI\u{2019}s path mirrors yours on the right column."));
     lines.push(p(""));
 
     lines.extend(render_dual(
@@ -390,19 +388,19 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(h("EXAMPLE: CAPTURING"));
     lines.push(p(""));
     lines.push(Line::from(vec![
-        Span::raw("  You roll 3. Your "),
+        Span::raw("You roll 3. Your "),
         Span::styled("\u{25cf}", sty_p1()),
         Span::raw(" on step 7 captures the AI\u{2019}s "),
         Span::styled("\u{25cb}", Style::default().fg(Color::LightRed)),
         Span::raw(" at step 10."),
     ]));
     lines.push(Line::from(vec![
-        Span::raw("  Captured "),
+        Span::raw("Captured "),
         Span::styled("\u{25cb}", Style::default().fg(Color::LightRed)),
         Span::raw(" returns to the AI\u{2019}s pool. Captures only happen in"),
     ]));
     lines.push(p(
-        "  the shared \u{25c6} column \u{2014} pieces on a \u{2726} are safe.",
+        "the shared \u{25c6} column \u{2014} pieces on a \u{2726} are safe.",
     ));
     lines.push(p(""));
 
@@ -429,13 +427,11 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(h("EXAMPLE: ROSETTE = EXTRA TURN"));
     lines.push(p(""));
     lines.push(Line::from(vec![
-        Span::raw("  You roll 1. Your "),
+        Span::raw("You roll 1. Your "),
         Span::styled("\u{25cf}", sty_p1()),
         Span::raw(" on step 7 lands on step 8 (\u{2726}). Rosette \u{2014} you"),
     ]));
-    lines.push(p(
-        "  roll again! Pieces on a rosette are safe from capture.",
-    ));
+    lines.push(p("roll again! Pieces on a rosette are safe from capture."));
     lines.push(p(""));
 
     let mut ros_before = default_path_board();
@@ -459,11 +455,11 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(h("EXAMPLE: BEARING OFF"));
     lines.push(p(""));
     lines.push(Line::from(vec![
-        Span::raw("  You roll 1. Your "),
+        Span::raw("You roll 1. Your "),
         Span::styled("\u{25cf}", sty_p1()),
         Span::raw(" on step 14 exits the board \u{2014} scored! You must"),
     ]));
-    lines.push(p("  roll exactly to bear off. First to score all 7 wins."));
+    lines.push(p("roll exactly to bear off. First to score all 7 wins."));
     lines.push(p(""));
 
     let mut bo_before = default_path_board();
@@ -482,19 +478,17 @@ fn help_lines() -> Vec<Line<'static>> {
     // ── DICE ─────────────────────────────────────────────────────────────
     lines.push(h("DICE"));
     lines.push(p(""));
+    lines.push(p("4 binary dice \u{2192} total 0 to 4. Roll 0 = no move."));
     lines.push(p(
-        "  4 binary dice \u{2192} total 0 to 4. Roll 0 = no move.",
-    ));
-    lines.push(p(
-        "  0: 6%  \u{00b7}  1: 25%  \u{00b7}  2: 38%  \u{00b7}  3: 25%  \u{00b7}  4: 6%",
+        "0: 6%  \u{00b7}  1: 25%  \u{00b7}  2: 38%  \u{00b7}  3: 25%  \u{00b7}  4: 6%",
     ));
     lines.push(p(""));
 
     // ── AI OPPONENT ──────────────────────────────────────────────────────
     lines.push(h("AI OPPONENT"));
     lines.push(p(""));
-    lines.push(p("  Expectiminimax search, weighted by dice probability."));
-    lines.push(p("  Easy (depth 2) \u{00b7} Medium (4) \u{00b7} Hard (6)"));
+    lines.push(p("Expectiminimax search, weighted by dice probability."));
+    lines.push(p("Easy (depth 2) \u{00b7} Medium (4) \u{00b7} Hard (6)"));
     lines.push(p(""));
 
     // ── CONTROLS ─────────────────────────────────────────────────────────
@@ -506,7 +500,7 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(key("Esc", "Pause menu"));
     lines.push(key("L", "Toggle game log"));
     lines.push(p(""));
-    lines.push(p("  In this screen:"));
+    lines.push(p(" In this screen:"));
     lines.push(key("\u{2191}\u{2193} or j/k", "Scroll"));
     lines.push(key("Esc / Enter", "Close"));
 
@@ -520,43 +514,27 @@ fn help_lines() -> Vec<Line<'static>> {
 ///
 /// Clamps `*scroll` to the valid range so the display never over-scrolls.
 pub fn render_help(f: &mut Frame, scroll: &mut u16) {
+    use crate::ui::styled_box::StyledBox;
     let area = f.size();
     let popup = centered_rect(72, area.height.saturating_sub(2), area);
     f.render_widget(Clear, popup);
 
     let lines = help_lines();
     let total_lines = lines.len() as u16;
-    let inner_h = popup.height.saturating_sub(2);
-    let max_scroll = total_lines.saturating_sub(inner_h);
+
+    // Render the box first to get the content rect.
+    let sb = StyledBox {
+        title: "The Royal Game of Ur",
+        border_color: Color::Yellow,
+        scrollable: true,
+    };
+    let content = sb.render(f, popup);
+
+    // Clamp scroll using actual available height.
+    let max_scroll = total_lines.saturating_sub(content.height);
     *scroll = (*scroll).min(max_scroll);
 
-    let scroll_hint = if max_scroll > 0 {
-        format!(
-            " \u{2191}\u{2193} scroll ({}/{}) \u{2014} Esc/Enter to close ",
-            *scroll + 1,
-            max_scroll + 1
-        )
-    } else {
-        " Esc or Enter to close ".to_string()
-    };
-
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow))
-        .title(Span::styled(
-            " The Royal Game of Ur ",
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        ))
-        .title_bottom(Span::styled(
-            scroll_hint,
-            Style::default().fg(Color::DarkGray),
-        ));
-
-    let inner = block.inner(popup);
-    f.render_widget(block, popup);
-    f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), inner);
+    f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), content);
 }
 
 /// Returns a centered rectangle of fixed char width and height, clamped to `area`.
