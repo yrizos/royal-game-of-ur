@@ -25,7 +25,7 @@ L            Toggle game log
 Esc          Pause menu
 ```
 
-Steps 1-4 are your private lane (left column). Steps 5-12 are the shared column (both players!). Steps 13-14 are your exit lane (left column). The AI's path mirrors yours on the right column.
+Steps 1-4 are your private lane (left column). Steps 5-12 are the bridge (both players!). Steps 13-14 are your exit lane (left column). The AI's path mirrors yours on the right column.
 
 ✦ = Rosette: extra turn + safe from capture. Must roll exactly to exit.
 
@@ -56,7 +56,7 @@ Steps 1-4 are your private lane (left column). Steps 5-12 are the shared column 
 | ---- | --- | --- | --- | --- | --- |
 | Prob | 6%  | 25% | 38% | 25% | 6%  |
 
-**Capturing.** Land on an opponent's piece in the shared ◆ column to send it back to their pool. Pieces on a ✦ are safe.
+**Capturing.** Land on an opponent's piece on the bridge ◆ to send it back to their pool. Pieces on a rosette ✦ are safe.
 
 **Bearing off.** Roll exactly to exit. First to score all 7 wins.
 

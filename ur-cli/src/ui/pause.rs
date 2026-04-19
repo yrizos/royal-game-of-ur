@@ -317,7 +317,7 @@ fn flow_board() -> Board {
         [c_down(), c_up(), c_empty()],   // col=3: step 1 ↓, step 8 ↑
         [c_down(), c_up(), c_empty()],   // col=2: step 2 ↓, step 7 ↑
         [c_down(), c_up(), c_empty()],   // col=1: step 3 ↓, step 6 ↑
-        [c_right(), c_up(), c_empty()],  // col=0: step 4 → (enters shared), step 5 ↑
+        [c_right(), c_up(), c_empty()],  // col=0: step 4 → (enters bridge), step 5 ↑
     ]
 }
 
@@ -365,10 +365,10 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(h("YOUR PATH (14 steps \u{2192} exit)"));
     lines.push(p(""));
     lines.push(p(
-        "Steps 1\u{2013}4 your private lane (left). Steps 5\u{2013}12 the shared",
+        "Steps 1\u{2013}4 your private lane (left). Steps 5\u{2013}12 the bridge",
     ));
     lines.push(p(
-        "column (both players!). Steps 13\u{2013}14 your exit lane (left).",
+        "(both players!). Steps 13\u{2013}14 your exit lane (left).",
     ));
     lines.push(p(
         "\u{2726} = Rosette: extra turn + safe. Must roll exactly to exit.",
@@ -402,7 +402,7 @@ fn help_lines() -> Vec<Line<'static>> {
         Span::raw(" returns to the AI\u{2019}s pool. Captures only happen in"),
     ]));
     lines.push(p(
-        "the shared \u{25c6} column \u{2014} pieces on a \u{2726} are safe.",
+        "the bridge \u{25c6} \u{2014} pieces on a rosette \u{2726} are safe.",
     ));
     lines.push(p(""));
 

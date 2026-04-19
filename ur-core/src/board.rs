@@ -4,7 +4,9 @@
 /// row 0 and row 2 have no columns 4 or 5.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Square {
+    /// Zero-based row index (0 = top).
     pub row: u8,
+    /// Zero-based column index (0 = left).
     pub col: u8,
 }
 
@@ -134,7 +136,7 @@ mod tests {
         assert_eq!(path.get(1), Some(Square::new(2, 2)));
         assert_eq!(path.get(2), Some(Square::new(2, 1)));
         assert_eq!(path.get(3), Some(Square::new(2, 0)));
-        // Shared middle row: col 0 through 7
+        // Bridge: col 0 through 7
         for col in 0u8..8 {
             assert_eq!(path.get(4 + col as usize), Some(Square::new(1, col)));
         }
@@ -152,7 +154,7 @@ mod tests {
         assert_eq!(path.get(1), Some(Square::new(0, 2)));
         assert_eq!(path.get(2), Some(Square::new(0, 1)));
         assert_eq!(path.get(3), Some(Square::new(0, 0)));
-        // Shared middle row: col 0 through 7
+        // Bridge: col 0 through 7
         for col in 0u8..8 {
             assert_eq!(path.get(4 + col as usize), Some(Square::new(1, col)));
         }
@@ -162,19 +164,19 @@ mod tests {
     }
 
     #[test]
-    fn test_shared_row_is_columns_0_through_7() {
+    fn test_bridge_is_columns_0_through_7() {
         let p1 = player1_path();
         let p2 = player2_path();
         for col in 0u8..8 {
             let sq = Square::new(1, col);
             assert!(
                 p1.index_of(sq).is_some(),
-                "Player1 path missing shared square (1,{})",
+                "Player1 path missing bridge square (1,{})",
                 col
             );
             assert!(
                 p2.index_of(sq).is_some(),
-                "Player2 path missing shared square (1,{})",
+                "Player2 path missing bridge square (1,{})",
                 col
             );
         }

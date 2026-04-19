@@ -145,7 +145,7 @@ The API design is informed by the RoyalUr Java/Python libraries but adapted to R
 
 The AI module should include:
 
-- A board evaluation heuristic that considers piece advancement, captures, rosette control, and piece safety.
+- A board evaluation heuristic that considers piece advancement, captures, rosette control, and bridge vulnerability.
 - Expectiminimax search that handles chance nodes (dice rolls) interleaved with decision nodes (move selection).
 - The ability to configure search depth, which acts as a difficulty setting.
 

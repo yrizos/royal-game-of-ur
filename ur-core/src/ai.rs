@@ -56,7 +56,7 @@ fn move_score(state: &GameState, mv: &Move, depth: u32) -> f64 {
 /// - Scored pieces (most valuable: +10 each)
 /// - Piece advancement along the path
 /// - Rosette occupancy bonus (+0.5 per rosette held)
-/// - Shared-row vulnerability penalty (−0.2 per piece exposed)
+/// - Bridge vulnerability penalty (−0.2 per piece exposed on the bridge)
 fn evaluate(state: &GameState) -> f64 {
     let player = state.current_player;
     let opponent = player.opponent();
@@ -80,14 +80,14 @@ fn evaluate(state: &GameState) -> f64 {
             None => continue,
         };
         let is_rosette = rules.board_shape.is_rosette(sq);
-        let is_shared = sq.row == 1;
+        let on_bridge = sq.row == 1;
 
         if piece.player == player {
             score += advancement;
             if is_rosette {
                 score += 0.5;
             }
-            if is_shared {
+            if on_bridge {
                 score -= 0.2; // exposed to capture
             }
         } else {
@@ -95,8 +95,8 @@ fn evaluate(state: &GameState) -> f64 {
             if is_rosette {
                 score -= 0.5;
             }
-            if is_shared && !is_rosette {
-                score += 0.15; // opponent is exposed on the shared row and capturable
+            if on_bridge && !is_rosette {
+                score += 0.15; // opponent is exposed on the bridge and capturable
             }
         }
     }

@@ -16,8 +16,11 @@ pub enum PieceLocation {
 /// A legal move: which piece moves, from where, to where.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Move {
+    /// The piece being moved.
     pub piece: Piece,
+    /// Where the piece is moving from.
     pub from: PieceLocation,
+    /// Where the piece is moving to.
     pub to: PieceLocation,
 }
 
@@ -51,11 +54,17 @@ pub enum GamePhase {
 /// Full ruleset configuration.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GameRules {
+    /// Which squares exist and which are rosettes.
     pub board_shape: BoardShape,
+    /// The ordered path Player 1's pieces follow from entry to exit.
     pub path_player1: Path,
+    /// The ordered path Player 2's pieces follow from entry to exit.
     pub path_player2: Path,
+    /// Number of pieces per player (typically 7).
     pub piece_count: u8,
+    /// Whether landing on a rosette grants the player an extra turn.
     pub rosettes_grant_extra_turn: bool,
+    /// Whether pieces on rosettes are immune to capture.
     pub rosettes_are_safe: bool,
 }
 
@@ -172,13 +181,17 @@ impl Default for Board {
 /// The complete, immutable snapshot of a game at a point in time.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct GameState {
+    /// The ruleset governing this game (board shape, paths, piece count, rosette rules).
     pub rules: GameRules,
+    /// Current board occupancy — which piece sits on each square.
     pub board: Board,
     /// Number of unplayed pieces for each player. Index via `Player::index()`.
     pub unplayed: [u8; 2],
     /// Number of scored pieces for each player. Index via `Player::index()`.
     pub scored: [u8; 2],
+    /// Whose turn it is.
     pub current_player: Player,
+    /// Current phase of the game (waiting for roll, or game over).
     pub phase: GamePhase,
 }
 
@@ -592,7 +605,7 @@ mod tests {
     }
 
     #[test]
-    fn test_capture_on_shared_row_is_legal() {
+    fn test_capture_on_bridge_is_legal() {
         let rules = GameRules::finkel();
         // Player1 at path index 4 (=(1,0)), Player2 at path index 5 (=(1,1))
         // Player1 rolls 1 → lands on (1,1) where Player2 sits → legal capture
@@ -668,8 +681,8 @@ mod tests {
         // Player2 at path index 2 (=(0,1)), roll 1 → path[3]=(0,0)
         // That's NOT the rosette above (which is (2,0)) — let's find P2's path
         // P2's path index 3 = (0,0). That's not a rosette.
-        // Let's place P1 on (1,3) which is shared AND a rosette, and P2 tries to reach it.
-        // P2 at path index 6 (=(1,2)), roll 1 → path[7]=(1,3) — the shared rosette.
+        // Let's place P1 on (1,3) which is on the bridge AND a rosette, and P2 tries to reach it.
+        // P2 at path index 6 (=(1,2)), roll 1 → path[7]=(1,3) — the bridge rosette.
         let p1_rosette = Square::new(1, 3);
         assert!(rules.board_shape.is_rosette(p1_rosette));
         let p2_start = rules.path_for(Player::Player2).get(6).unwrap(); // (1,2)
@@ -685,7 +698,7 @@ mod tests {
             moves
                 .iter()
                 .all(|m| m.to != PieceLocation::OnBoard(p1_rosette)),
-            "Player2 should not be able to capture Player1 on the shared rosette"
+            "Player2 should not be able to capture Player1 on the bridge rosette"
         );
     }
 

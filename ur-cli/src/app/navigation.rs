@@ -3,7 +3,7 @@ use super::CURSOR_BEAR_OFF;
 /// 2-D navigation grid: NAV_GRID[visual_row][col] → cursor_path_pos.
 /// Visual row 0 = top of board (finish end); row 7 = bottom (entry end).
 /// Col 0 = left (player private lane + virtual off-board slots).
-/// Col 1 = right (shared middle column).
+/// Col 1 = right (the bridge).
 ///
 /// Board layout after vertical flip:
 ///   row 0: [step 13, step 12]

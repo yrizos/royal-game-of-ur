@@ -26,7 +26,9 @@ impl Player {
 /// A single game piece, identified by its owner and a 0-based index (0–6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Piece {
+    /// Which player owns this piece.
     pub player: Player,
+    /// Zero-based index distinguishing this piece from the player's other pieces (0–6).
     pub index: u8,
 }
 
