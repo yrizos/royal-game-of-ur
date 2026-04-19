@@ -3,10 +3,23 @@ use rand::Rng;
 /// The result of rolling four binary tetrahedral dice, producing a value 0–4.
 ///
 /// Each die contributes 1 if it lands marked-side up. The total is the sum.
+/// The inner field is private; use [`Dice::new`] or [`Dice::roll`] to construct.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Dice(pub u8);
+pub struct Dice(u8);
 
 impl Dice {
+    /// Maximum valid dice value (four binary dice, all marked-side up).
+    pub const MAX: u8 = 4;
+
+    /// Creates a `Dice` with the given value, or `None` if `value > 4`.
+    pub const fn new(value: u8) -> Option<Dice> {
+        if value > Self::MAX {
+            None
+        } else {
+            Some(Dice(value))
+        }
+    }
+
     /// Generates a random dice roll using the caller-provided RNG.
     ///
     /// Simulates four independent fair binary dice (each 50/50), returning
@@ -17,8 +30,14 @@ impl Dice {
     }
 
     /// Returns the numeric value of this roll (0–4).
-    pub fn value(self) -> u8 {
+    pub const fn value(self) -> u8 {
         self.0
+    }
+
+    /// Cycles to the next display value (0→1→2→3→4→0…).
+    /// Used for animating dice rolls.
+    pub fn cycle(&mut self) {
+        self.0 = (self.0 + 1) % 5;
     }
 }
 

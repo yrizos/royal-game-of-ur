@@ -45,7 +45,7 @@ pub fn tick_animation(anim: &mut Animation) {
                 *anim = Animation::Done;
             } else {
                 *frames_remaining -= 1;
-                display.0 = (display.0 + 1) % 5;
+                display.cycle();
             }
         }
         Animation::PieceMove {
@@ -98,14 +98,14 @@ pub fn tick(app: &mut App) {
     if let crate::app::Screen::DiceOff { state } = &mut app.screen {
         if state.p1_frames > 0 {
             state.p1_frames -= 1;
-            state.p1_display.0 = (state.p1_display.0 + 1) % 5;
+            state.p1_display.cycle();
             if state.p1_frames == 0 {
                 state.p1_display = state.p1_final;
             }
         }
         if state.p2_frames > 0 {
             state.p2_frames -= 1;
-            state.p2_display.0 = (state.p2_display.0 + 1) % 5;
+            state.p2_display.cycle();
             if state.p2_frames == 0 {
                 state.p2_display = state.p2_final;
             }
@@ -113,7 +113,7 @@ pub fn tick(app: &mut App) {
         // Determine winner once both animations complete
         if state.p1_frames == 0 && state.p2_frames == 0 && state.winner.is_none() {
             use ur_core::player::Player;
-            state.winner = match state.p1_final.0.cmp(&state.p2_final.0) {
+            state.winner = match state.p1_final.value().cmp(&state.p2_final.value()) {
                 std::cmp::Ordering::Greater => Some(Player::Player1),
                 std::cmp::Ordering::Less => Some(Player::Player2),
                 std::cmp::Ordering::Equal => None, // tie — schedule re-roll below
@@ -126,8 +126,8 @@ pub fn tick(app: &mut App) {
                 state.p2_frames = FRAMES;
                 state.p1_final = ur_core::dice::Dice::roll(&mut app.rng);
                 state.p2_final = ur_core::dice::Dice::roll(&mut app.rng);
-                state.p1_display = Dice(0);
-                state.p2_display = Dice(0);
+                state.p1_display = Dice::new(0).unwrap();
+                state.p2_display = Dice::new(0).unwrap();
             }
         }
     }
@@ -152,8 +152,8 @@ mod tests {
     fn test_dice_animation_counts_down() {
         let mut anim = Animation::DiceRoll {
             frames_remaining: 5,
-            final_value: Dice(3),
-            display: Dice(0),
+            final_value: Dice::new(3).unwrap(),
+            display: Dice::new(0).unwrap(),
         };
         tick_animation(&mut anim);
         match anim {
@@ -168,8 +168,8 @@ mod tests {
     fn test_dice_animation_finishes_at_zero() {
         let mut anim = Animation::DiceRoll {
             frames_remaining: 1,
-            final_value: Dice(3),
-            display: Dice(0),
+            final_value: Dice::new(3).unwrap(),
+            display: Dice::new(0).unwrap(),
         };
         tick_animation(&mut anim);
         assert!(matches!(anim, Animation::Done));
@@ -315,7 +315,7 @@ mod tests {
         let mut app = App::new();
         app.screen = Screen::Game;
         app.game_state = Some(GameState::new(&GameRules::finkel()));
-        app.dice_roll = Some(Dice(0));
+        app.dice_roll = Some(Dice::new(0).unwrap());
         app.forfeit_after = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
 
         tick(&mut app);

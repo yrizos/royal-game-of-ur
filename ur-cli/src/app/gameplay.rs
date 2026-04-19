@@ -74,7 +74,7 @@ impl App {
         self.animation = Some(Animation::DiceRoll {
             frames_remaining: DICE_ROLL_ANIMATION_FRAMES,
             final_value,
-            display: Dice(0),
+            display: Dice::new(0).unwrap(),
         });
         self.dice_roll = Some(final_value);
     }
@@ -327,7 +327,7 @@ impl App {
         self.animation = Some(Animation::DiceRoll {
             frames_remaining: DICE_ROLL_ANIMATION_FRAMES,
             final_value: roll,
-            display: Dice(0),
+            display: Dice::new(0).unwrap(),
         });
 
         let moves = gs.legal_moves(roll);
@@ -377,7 +377,7 @@ impl App {
         self.animation = Some(Animation::DiceRoll {
             frames_remaining: DICE_ROLL_ANIMATION_FRAMES,
             final_value,
-            display: Dice(0),
+            display: Dice::new(0).unwrap(),
         });
         self.dice_roll = Some(final_value);
         self.log.push(LogEntry {
@@ -470,7 +470,7 @@ mod tests {
     fn app_with_moves() -> App {
         let mut app = App::new();
         let gs = GameState::new(&ur_core::state::GameRules::finkel());
-        app.legal_moves = gs.legal_moves(Dice(1));
+        app.legal_moves = gs.legal_moves(Dice::new(1).unwrap());
         app.game_state = Some(gs);
         app
     }
@@ -489,10 +489,10 @@ mod tests {
         let mut app = App::new();
         app.screen = Screen::Game;
         app.game_state = Some(GameState::new(&ur_core::state::GameRules::finkel()));
-        app.dice_roll = Some(Dice(3));
+        app.dice_roll = Some(Dice::new(3).unwrap());
         app.animation = None;
         app.handle_roll_dice();
-        assert_eq!(app.dice_roll, Some(Dice(3)));
+        assert_eq!(app.dice_roll, Some(Dice::new(3).unwrap()));
         assert!(app.animation.is_none());
     }
 
@@ -602,21 +602,21 @@ mod tests {
         let mut gs = GameState::new(&rules);
         gs.current_player = Player::Player2;
         app.game_state = Some(gs.clone());
-        app.dice_roll = Some(Dice(1));
-        let moves = gs.legal_moves(Dice(1));
+        app.dice_roll = Some(Dice::new(1).unwrap());
+        let moves = gs.legal_moves(Dice::new(1).unwrap());
         let mv = moves
             .into_iter()
             .next()
             .expect("should have at least one legal move");
         app.apply_move(mv);
-        assert_eq!(app.last_roll[1], Some(Dice(1)));
+        assert_eq!(app.last_roll[1], Some(Dice::new(1).unwrap()));
     }
 
     #[test]
     fn test_on_animation_done_sets_forfeit_after_on_no_moves() {
         let mut app = make_app_with_game();
         app.screen = Screen::Game;
-        app.dice_roll = Some(Dice(0));
+        app.dice_roll = Some(Dice::new(0).unwrap());
         app.on_animation_done();
         assert!(app.forfeit_after.is_some());
         assert!(app.dice_roll.is_some());
@@ -627,7 +627,7 @@ mod tests {
     fn test_tick_forfeit_delay_advances_to_ai_when_deadline_past() {
         let mut app = make_app_with_game();
         app.screen = Screen::Game;
-        app.dice_roll = Some(Dice(0));
+        app.dice_roll = Some(Dice::new(0).unwrap());
         app.forfeit_after = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
         app.tick_forfeit_delay();
         assert!(app.forfeit_after.is_none());
@@ -638,7 +638,7 @@ mod tests {
     fn test_tick_forfeit_delay_waits_until_deadline() {
         let mut app = make_app_with_game();
         app.screen = Screen::Game;
-        app.dice_roll = Some(Dice(0));
+        app.dice_roll = Some(Dice::new(0).unwrap());
         app.forfeit_after = Some(std::time::Instant::now() + std::time::Duration::from_secs(10));
         app.tick_forfeit_delay();
         assert!(app.forfeit_after.is_some());
@@ -654,13 +654,13 @@ mod tests {
         let path = rules.path_for(Player::Player2);
         let to_sq = path.get(0).unwrap();
         assert!(!rules.board_shape.is_rosette(to_sq));
-        let moves = gs.legal_moves(Dice(1));
+        let moves = gs.legal_moves(Dice::new(1).unwrap());
         let mv = moves
             .into_iter()
             .next()
             .expect("should have at least one legal move");
         app.game_state = Some(gs);
-        app.dice_roll = Some(Dice(1));
+        app.dice_roll = Some(Dice::new(1).unwrap());
         app.apply_move(mv);
         assert!(app.pending_roll);
         assert!(!app.rosette_reroll);

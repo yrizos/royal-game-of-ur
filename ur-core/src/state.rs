@@ -455,7 +455,7 @@ mod tests {
     fn test_no_legal_moves_roll_0() {
         let rules = GameRules::finkel();
         let state = GameState::new(&rules);
-        assert!(state.legal_moves(Dice(0)).is_empty());
+        assert!(state.legal_moves(Dice::new(0).unwrap()).is_empty());
     }
 
     #[test]
@@ -466,7 +466,7 @@ mod tests {
         state.unplayed[Player::Player1.index()] = 0;
         for roll in 1u8..=4 {
             assert!(
-                state.legal_moves(Dice(roll)).is_empty(),
+                state.legal_moves(Dice::new(roll).unwrap()).is_empty(),
                 "expected no moves for roll {roll}"
             );
         }
@@ -493,7 +493,7 @@ mod tests {
         s.unplayed[Player::Player1.index()] = 0;
         // Piece at path[3] cannot move anywhere 1-4 steps ahead (all friendly)
         for roll in 1u8..=4 {
-            let moves = s.legal_moves(Dice(roll));
+            let moves = s.legal_moves(Dice::new(roll).unwrap());
             assert!(
                 moves
                     .iter()
@@ -507,7 +507,7 @@ mod tests {
     fn test_can_enter_piece_from_pool() {
         let rules = GameRules::finkel();
         let state = GameState::new(&rules); // all 7 pieces unplayed
-        let moves = state.legal_moves(Dice(1));
+        let moves = state.legal_moves(Dice::new(1).unwrap());
         // With roll=1 and entry square (path[0] = (2,3)) empty, entering is legal
         assert!(!moves.is_empty());
         let entry_sq = rules.path_for(Player::Player1).get(0).unwrap();
@@ -528,7 +528,7 @@ mod tests {
         let entry_sq = rules.path_for(Player::Player1).get(0).unwrap();
         s.board.set(entry_sq, Some(Piece::new(Player::Player1, 0)));
         // Now roll=1 would land there — must be blocked
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         assert!(
             !moves
                 .iter()
@@ -547,7 +547,7 @@ mod tests {
         let mut s = GameState::new(&rules);
         s.board.set(entry_sq, Some(Piece::new(Player::Player2, 0)));
         s.unplayed[Player::Player2.index()] = 6;
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         assert!(
             moves
                 .iter()
@@ -567,7 +567,7 @@ mod tests {
         s.board.set(last_sq, Some(Piece::new(Player::Player1, 0)));
         s.unplayed[Player::Player1.index()] = 6; // 1 on board, 6 unplayed
                                                  // Roll=1 from index 13 → index 14 = path.len() → exact bear-off
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         assert!(moves.iter().any(|m| m.from == PieceLocation::OnBoard(last_sq)
             && m.to == PieceLocation::Scored),
             "roll=1 from last square should produce a bear-off move");
@@ -582,7 +582,7 @@ mod tests {
         s.board.set(last_sq, Some(Piece::new(Player::Player1, 0)));
         s.unplayed[Player::Player1.index()] = 6;
         // Roll=2 from index 13 → index 15 > 14 → overshoot, illegal
-        let moves = s.legal_moves(Dice(2));
+        let moves = s.legal_moves(Dice::new(2).unwrap());
         assert!(
             moves
                 .iter()
@@ -604,7 +604,7 @@ mod tests {
         s.board.set(p1_sq, Some(Piece::new(Player::Player1, 0)));
         s.board.set(p2_sq, Some(Piece::new(Player::Player2, 0)));
         s.unplayed = [6, 6];
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         assert!(
             moves.iter().any(|m| m.from == PieceLocation::OnBoard(p1_sq)
                 && m.to == PieceLocation::OnBoard(p2_sq)),
@@ -624,7 +624,7 @@ mod tests {
         s.board.set(p1_sq, Some(Piece::new(Player::Player1, 0)));
         s.board.set(rosette, Some(Piece::new(Player::Player2, 0)));
         s.unplayed = [6, 6];
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         assert!(
             moves
                 .iter()
@@ -643,7 +643,7 @@ mod tests {
         s.board.set(sq0, Some(Piece::new(Player::Player1, 0)));
         s.board.set(sq1, Some(Piece::new(Player::Player1, 1)));
         s.unplayed[Player::Player1.index()] = 5;
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         // piece 0 at sq0 cannot move to sq1 (friendly)
         assert!(
             moves
@@ -680,7 +680,7 @@ mod tests {
             .set(p1_rosette, Some(Piece::new(Player::Player1, 0)));
         s2.unplayed = [6, 6];
         s2.current_player = Player::Player2;
-        let moves = s2.legal_moves(Dice(1));
+        let moves = s2.legal_moves(Dice::new(1).unwrap());
         assert!(
             moves
                 .iter()
@@ -700,7 +700,7 @@ mod tests {
         let expected_sq = rules.path_for(Player::Player1).get(7).unwrap();
         s.board.set(start_sq, Some(Piece::new(Player::Player1, 0)));
         s.unplayed[Player::Player1.index()] = 6;
-        let moves = s.legal_moves(Dice(3));
+        let moves = s.legal_moves(Dice::new(3).unwrap());
         let mv = moves
             .iter()
             .find(|m| m.from == PieceLocation::OnBoard(start_sq))
@@ -724,7 +724,7 @@ mod tests {
         s.board.set(p1_sq, Some(Piece::new(Player::Player1, 0)));
         s.board.set(p2_sq, Some(Piece::new(Player::Player2, 0)));
         s.unplayed = [6, 6];
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         let capture_mv = moves
             .iter()
             .find(|m| {
@@ -754,7 +754,7 @@ mod tests {
         s.board.set(p1_sq, Some(Piece::new(Player::Player1, 0)));
         s.board.set(p2_sq, Some(p2_piece));
         s.unplayed = [6, 6];
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         let capture_mv = moves
             .iter()
             .find(|m| m.to == PieceLocation::OnBoard(p2_sq))
@@ -774,7 +774,7 @@ mod tests {
         assert!(rules.board_shape.is_rosette(rosette_sq));
         s.board.set(start_sq, Some(Piece::new(Player::Player1, 0)));
         s.unplayed[Player::Player1.index()] = 6;
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         let mv = moves
             .iter()
             .find(|m| m.to == PieceLocation::OnBoard(rosette_sq))
@@ -793,7 +793,7 @@ mod tests {
         let mut s = GameState::new(&rules);
         // P1 enters at path[0]=(2,3) with roll=1.
         s.unplayed[Player::Player1.index()] = 7;
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         let enter_mv = moves
             .iter()
             .find(|m| m.from == PieceLocation::Unplayed)
@@ -814,7 +814,7 @@ mod tests {
         let last_sq = rules.path_for(Player::Player1).get(13).unwrap();
         s.board.set(last_sq, Some(Piece::new(Player::Player1, 0)));
         s.unplayed[Player::Player1.index()] = 6;
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         let bear_off = moves
             .iter()
             .find(|m| m.to == PieceLocation::Scored)
@@ -834,7 +834,7 @@ mod tests {
         s.unplayed[Player::Player1.index()] = 0;
         let last_sq = rules.path_for(Player::Player1).get(13).unwrap();
         s.board.set(last_sq, Some(Piece::new(Player::Player1, 0)));
-        let moves = s.legal_moves(Dice(1));
+        let moves = s.legal_moves(Dice::new(1).unwrap());
         let bear_off = moves
             .iter()
             .find(|m| m.to == PieceLocation::Scored)
@@ -884,7 +884,7 @@ mod tests {
         let rules = GameRules::finkel();
         let s = GameState::new(&rules);
         // Roll 0 always produces no legal moves
-        assert!(s.legal_moves(Dice(0)).is_empty());
+        assert!(s.legal_moves(Dice::new(0).unwrap()).is_empty());
         // forfeit_turn hands the turn to the opponent
         let after_forfeit = s
             .forfeit_turn()

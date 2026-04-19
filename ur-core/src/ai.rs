@@ -112,7 +112,7 @@ fn chance_node(state: &GameState, depth: u32) -> f64 {
     }
     (0u8..=4)
         .map(|v| {
-            let roll = Dice(v);
+            let roll = Dice::new(v).unwrap();
             let prob = DICE_PROBABILITIES[v as usize];
             let moves = state.legal_moves(roll);
             let value = if moves.is_empty() {
@@ -147,7 +147,7 @@ mod tests {
     fn test_ai_depth_1_returns_valid_move() {
         let rules = GameRules::finkel();
         let state = GameState::new(&rules);
-        let roll = Dice(2);
+        let roll = Dice::new(2).unwrap();
         let moves = state.legal_moves(roll);
         assert!(!moves.is_empty());
         let chosen = choose_move(&state, roll, 1);
@@ -173,7 +173,7 @@ mod tests {
         s.board
             .set(neutral_from, Some(Piece::new(Player::Player1, 1)));
         s.unplayed = [5, 6];
-        let roll = Dice(1);
+        let roll = Dice::new(1).unwrap();
         let chosen = choose_move(&s, roll, 1);
         assert_eq!(
             chosen.from,
@@ -195,7 +195,7 @@ mod tests {
         s.board
             .set(neutral_from, Some(Piece::new(Player::Player1, 1)));
         s.unplayed[Player::Player1.index()] = 5;
-        let roll = Dice(1);
+        let roll = Dice::new(1).unwrap();
         let chosen = choose_move(&s, roll, 1);
         assert_eq!(
             chosen.from,
@@ -208,7 +208,7 @@ mod tests {
     fn test_ai_does_not_panic_at_depth_0() {
         let rules = GameRules::finkel();
         let state = GameState::new(&rules);
-        let roll = Dice(1);
+        let roll = Dice::new(1).unwrap();
         let moves = state.legal_moves(roll);
         assert!(!moves.is_empty());
         let chosen = choose_move(&state, roll, 0);
@@ -227,7 +227,7 @@ mod tests {
         s.board.set(last_sq, Some(Piece::new(Player::Player1, 0)));
         s.board.set(mid_sq, Some(Piece::new(Player::Player1, 1)));
         s.unplayed[Player::Player1.index()] = 0;
-        let roll = Dice(1);
+        let roll = Dice::new(1).unwrap();
         let chosen = choose_move(&s, roll, 1);
         assert_eq!(
             chosen.to,
@@ -242,7 +242,7 @@ mod tests {
         let rules = GameRules::finkel();
         let state = GameState::new(&rules);
         // Roll 0 always yields no legal moves
-        choose_move(&state, Dice(0), 1);
+        choose_move(&state, Dice::new(0).unwrap(), 1);
     }
 
     #[test]

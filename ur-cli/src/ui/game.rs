@@ -25,7 +25,7 @@ const COLOR_SELECTED_BG: Color = Color::Rgb(30, 60, 30);
 const COLOR_TARGET_BG: Color = Color::Rgb(40, 20, 60);
 
 /// Describes what the dice widget inside a player panel should show.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PanelDice {
     /// Nothing to show (panel is inactive and no prior roll to display).
     Hidden,
@@ -1043,11 +1043,11 @@ mod tests {
     #[test]
     fn test_compute_panel_dice_animating() {
         let mut app = make_app_with_game();
-        app.dice_roll = Some(Dice(3));
+        app.dice_roll = Some(Dice::new(3).unwrap());
         app.animation = Some(Animation::DiceRoll {
             frames_remaining: 5,
-            final_value: Dice(3),
-            display: Dice(2),
+            final_value: Dice::new(3).unwrap(),
+            display: Dice::new(2).unwrap(),
         });
         let result = compute_panel_dice(&app, Player::Player1);
         assert!(
@@ -1061,41 +1061,28 @@ mod tests {
     #[test]
     fn test_compute_panel_dice_no_moves() {
         let mut app = make_app_with_game();
-        app.dice_roll = Some(Dice(1));
+        app.dice_roll = Some(Dice::new(1).unwrap());
         app.forfeit_after = Some(std::time::Instant::now());
         let result = compute_panel_dice(&app, Player::Player1);
-        assert!(
-            matches!(result, PanelDice::NoMoves(Dice(1))),
-            "expected NoMoves(Dice(1)), got {:?}",
-            result
-        );
+        assert_eq!(result, PanelDice::NoMoves(Dice::new(1).unwrap()));
     }
 
     /// Branch 5: active player + dice_roll set, no animation, no forfeit => Result
     #[test]
     fn test_compute_panel_dice_result() {
         let mut app = make_app_with_game();
-        app.dice_roll = Some(Dice(2));
+        app.dice_roll = Some(Dice::new(2).unwrap());
         let result = compute_panel_dice(&app, Player::Player1);
-        assert!(
-            matches!(result, PanelDice::Result(Dice(2))),
-            "expected Result(Dice(2)), got {:?}",
-            result
-        );
+        assert_eq!(result, PanelDice::Result(Dice::new(2).unwrap()));
     }
 
     /// Branch 6: inactive player + last_roll set => LastRoll (works for both players)
     #[test]
     fn test_compute_panel_dice_last_roll() {
         let mut app = make_app_with_game();
-        app.last_roll[1] = Some(Dice(4));
-        // Player2 is inactive (current_player is Player1 in fresh GameState)
+        app.last_roll[1] = Some(Dice::new(4).unwrap());
         let result = compute_panel_dice(&app, Player::Player2);
-        assert!(
-            matches!(result, PanelDice::LastRoll(Dice(4))),
-            "expected LastRoll(Dice(4)), got {:?}",
-            result
-        );
+        assert_eq!(result, PanelDice::LastRoll(Dice::new(4).unwrap()));
     }
 
     /// Branch 6b: inactive Player1 panel shows its last roll too
@@ -1103,17 +1090,12 @@ mod tests {
     fn test_compute_panel_dice_last_roll_player1_when_inactive() {
         let rules = GameRules::finkel();
         let mut gs = GameState::new(&rules);
-        // Make Player2 the current player so Player1 is inactive
         gs.current_player = Player::Player2;
         let mut app = App::new();
         app.game_state = Some(gs);
-        app.last_roll[0] = Some(Dice(2));
+        app.last_roll[0] = Some(Dice::new(2).unwrap());
         let result = compute_panel_dice(&app, Player::Player1);
-        assert!(
-            matches!(result, PanelDice::LastRoll(Dice(2))),
-            "expected LastRoll(Dice(2)), got {:?}",
-            result
-        );
+        assert_eq!(result, PanelDice::LastRoll(Dice::new(2).unwrap()));
     }
 
     /// Branch 7: inactive player with no last roll => Hidden
@@ -1164,7 +1146,7 @@ mod tests {
                     0,
                     7,
                     0,
-                    PanelDice::LastRoll(Dice(3)),
+                    PanelDice::LastRoll(Dice::new(3).unwrap()),
                     Some("captured!"),
                     &[vec![
                         "rolled 3".to_string(),

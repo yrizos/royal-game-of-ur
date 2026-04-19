@@ -49,7 +49,7 @@ Entry -> (0,3) -> (0,2) -> (0,1) -> (0,0)
       -> (0,7) -> (0,6) -> Exit
 ```
 
-The middle row (row 1, columns 0 through 7) is shared. Both players' pieces occupy the same physical squares on this row and can interact (captures).
+The middle row (row 1, columns 0 through 7) is the bridge — the contested track shared by both players. Both players' pieces occupy the same physical squares on this row and can interact (captures).
 
 The private rows (row 0 for Player 2, row 2 for Player 1) and the exit squares (columns 6 and 7 on private rows) are exclusive to each player.
 
@@ -164,7 +164,7 @@ Game logic is ideal for comprehensive unit testing because every rule is determi
 
 Required test coverage:
 
-- Legal move generation for every edge case: no legal moves, bearing off with exact roll, overshooting blocked, rosette safety, capture on shared row, capture blocked by rosette, friendly square blocked.
+- Legal move generation for every edge case: no legal moves, bearing off with exact roll, overshooting blocked, rosette safety, capture on the bridge, capture blocked by rosette, friendly square blocked.
 - Move application: piece advancement, capture and return to pool, rosette extra turn, scoring a piece, win detection.
 - Path correctness: verify each player's path covers the right squares in the right order.
 - AI: verify the AI selects reasonable moves at depth 1 (should prefer captures and rosettes over neutral moves).
