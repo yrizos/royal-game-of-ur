@@ -14,8 +14,8 @@ fn play_random_game(rng: &mut StdRng) -> (Player, GameState) {
     let mut state = GameState::new(&rules);
 
     for _ in 0..10_000 {
-        match state.phase.clone() {
-            GamePhase::GameOver(winner) => return (winner, state),
+        match &state.phase {
+            GamePhase::GameOver(winner) => return (*winner, state),
             GamePhase::WaitingForRoll => {
                 let roll = Dice::roll(rng);
                 let moves = state.legal_moves(roll);

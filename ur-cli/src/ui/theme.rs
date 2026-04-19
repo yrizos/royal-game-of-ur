@@ -1,4 +1,5 @@
 use ratatui::style::Color;
+use std::time::Duration;
 
 /// Player 1 (human) colour — light blue throughout the UI.
 pub const COLOR_P1: Color = Color::LightBlue;
@@ -16,3 +17,9 @@ pub const COLOR_TARGET_BG: Color = Color::Rgb(40, 20, 60);
 pub const COLOR_DIM: Color = Color::DarkGray;
 /// Mid-brightness text (descriptions, inactive labels).
 pub const COLOR_SUB: Color = Color::Gray;
+
+/// Formats a duration as `MM:SS`.
+pub fn format_duration(d: Duration) -> String {
+    let secs = d.as_secs();
+    format!("{:02}:{:02}", secs / 60, secs % 60)
+}

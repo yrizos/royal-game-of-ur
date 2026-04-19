@@ -538,7 +538,6 @@ pub fn render_player_panel(
     unplayed: u8,
     scored: u8,
     panel_dice: PanelDice,
-    _event_msg: Option<&str>,
     turn_log: &[Vec<String>],
 ) {
     use crate::ui::styled_box::StyledBox;
@@ -716,8 +715,7 @@ pub fn render_status_bar(
     ai_thinking: bool,
     ai_spinner_frame: u32,
 ) {
-    let secs = elapsed.as_secs();
-    let time_str = format!("{:02}:{:02}", secs / 60, secs % 60);
+    let time_str = super::theme::format_duration(elapsed);
 
     let spinner = ["\u{280b}", "\u{2819}", "\u{2839}", "\u{2838}"][ai_spinner_frame as usize % 4];
     let ai_str = if ai_thinking {
@@ -817,7 +815,6 @@ pub fn render_game(f: &mut Frame, app: &App) {
         game_state.unplayed[0],
         game_state.scored[0],
         compute_panel_dice(app, Player::Player1),
-        app.last_event[0].as_deref(),
         &app.turn_log[0],
     );
     render_player_panel(
@@ -830,7 +827,6 @@ pub fn render_game(f: &mut Frame, app: &App) {
         game_state.unplayed[1],
         game_state.scored[1],
         compute_panel_dice(app, Player::Player2),
-        app.last_event[1].as_deref(),
         &app.turn_log[1],
     );
 
@@ -1145,7 +1141,6 @@ mod tests {
                     7,
                     0,
                     PanelDice::LastRoll(Dice::new(3).unwrap()),
-                    Some("captured!"),
                     &[vec![
                         "rolled 3".to_string(),
                         "captured at step 10".to_string(),

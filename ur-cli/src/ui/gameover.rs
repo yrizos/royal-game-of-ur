@@ -52,8 +52,7 @@ pub fn render(f: &mut Frame, data: &GameOverData) {
         Style::default().fg(COLOR_P2).add_modifier(Modifier::BOLD)
     };
 
-    let secs = data.elapsed.as_secs();
-    let time_str = format!("{:02}:{:02}", secs / 60, secs % 60);
+    let time_str = super::theme::format_duration(data.elapsed);
 
     let lines = vec![
         Line::from(Span::styled("═══ Game Over ═══", gold)).alignment(Alignment::Center),
