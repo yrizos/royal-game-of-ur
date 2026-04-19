@@ -187,21 +187,21 @@ enum BL {
 const SEQ: [BL; 18] = [
     BL::Hdr,
     BL::Top,
-    BL::R(0),
+    BL::R(0), // col=7: steps 13/12
     BL::HB,
-    BL::R(1),
-    BL::HB,
-    BL::R(2),
-    BL::HB,
-    BL::R(3),
-    BL::TC,
-    BL::NR(4),
+    BL::R(1),  // col=6: steps 14✦/11
+    BL::TC,    // narrow gap opens
+    BL::NR(2), // col=5: step 10
     BL::Nhb,
-    BL::NR(5),
-    BL::TO,
-    BL::R(6),
+    BL::NR(3), // col=4: step 9
+    BL::TO,    // narrow gap closes
+    BL::R(4),  // col=3: steps 1/8✦
     BL::HB,
-    BL::R(7),
+    BL::R(5), // col=2: steps 2/7
+    BL::HB,
+    BL::R(6), // col=1: steps 3/6
+    BL::HB,
+    BL::R(7), // col=0: steps 4✦/5
     BL::Bot,
 ];
 
@@ -293,29 +293,31 @@ fn render_dual(
 // ── Default board with all path numbers ──────────────────────────────────────
 
 fn default_path_board() -> Board {
+    // Row 0 = top (col 7), row 7 = bottom (col 0) — matches game board orientation.
     [
-        [c_you_r(4), c_sh(5), c_empty()],
-        [c_you(3), c_sh(6), c_empty()],
-        [c_you(2), c_sh(7), c_empty()],
-        [c_you(1), c_sh_r(8), c_empty()],
-        [c_empty(), c_sh(9), c_empty()],
-        [c_empty(), c_sh(10), c_empty()],
-        [c_you_r(14), c_sh(11), c_empty()],
-        [c_you(13), c_sh(12), c_empty()],
+        [c_you(13), c_sh(12), c_empty()],   // col=7 (top)
+        [c_you_r(14), c_sh(11), c_empty()], // col=6: step 14✦
+        [c_empty(), c_sh(10), c_empty()],   // col=5 (narrow gap)
+        [c_empty(), c_sh(9), c_empty()],    // col=4 (narrow gap)
+        [c_you(1), c_sh_r(8), c_empty()],   // col=3: step 8✦
+        [c_you(2), c_sh(7), c_empty()],     // col=2
+        [c_you(3), c_sh(6), c_empty()],     // col=1
+        [c_you_r(4), c_sh(5), c_empty()],   // col=0 (bottom): step 4✦
     ]
 }
 
 /// Arrows showing the direction of travel at each step.
 fn flow_board() -> Board {
+    // Matches flipped orientation: top=col7, bottom=col0.
     [
-        [c_right(), c_down(), c_empty()], // step 4 →, step 5 ↓
-        [c_up(), c_down(), c_empty()],    // step 3 ↑, step 6 ↓
-        [c_up(), c_down(), c_empty()],    // step 2 ↑, step 7 ↓
-        [c_up(), c_down(), c_empty()],    // step 1 ↑, step 8 ↓
-        [c_empty(), c_down(), c_empty()], // step 9 ↓
-        [c_empty(), c_down(), c_empty()], // step 10 ↓
-        [c_up(), c_down(), c_empty()],    // step 14 ↑, step 11 ↓
-        [c_up(), c_left(), c_empty()],    // step 13 ↑, step 12 ←
+        [c_down(), c_left(), c_empty()], // col=7: step 13 ↓ (exit), step 12 ← (exit lane)
+        [c_down(), c_up(), c_empty()],   // col=6: step 14 ↓ (scored), step 11 ↑
+        [c_empty(), c_up(), c_empty()],  // col=5: step 10 ↑
+        [c_empty(), c_up(), c_empty()],  // col=4: step 9 ↑
+        [c_down(), c_up(), c_empty()],   // col=3: step 1 ↓, step 8 ↑
+        [c_down(), c_up(), c_empty()],   // col=2: step 2 ↓, step 7 ↑
+        [c_down(), c_up(), c_empty()],   // col=1: step 3 ↓, step 6 ↑
+        [c_right(), c_up(), c_empty()],  // col=0: step 4 → (enters shared), step 5 ↑
     ]
 }
 
@@ -405,13 +407,13 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(p(""));
 
     let mut cap_before = default_path_board();
-    cap_before[2][1] = c_p1(); // ● at step 7 (row 2, mid)
-    cap_before[3][1] = c_down(); // ↓ passing through step 8
-    cap_before[4][1] = c_down(); // ↓ passing through step 9
-    cap_before[5][1] = c_p2(); // ○ at step 10 (row 5, mid)
+    cap_before[5][1] = c_p1(); // ● at step 7 (row 5, mid)
+    cap_before[4][1] = c_up(); // ↑ passing through step 8
+    cap_before[3][1] = c_up(); // ↑ passing through step 9
+    cap_before[2][1] = c_p2(); // ○ at step 10 (row 2, mid)
 
     let mut cap_after = default_path_board();
-    cap_after[5][1] = c_p1(); // ● landed at step 10
+    cap_after[2][1] = c_p1(); // ● landed at step 10
 
     lines.extend(render_dual(
         ind,
@@ -435,11 +437,11 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(p(""));
 
     let mut ros_before = default_path_board();
-    ros_before[2][1] = c_p1(); // ● at step 7
-    ros_before[3][1] = c_down(); // ↓ heading to step 8
+    ros_before[5][1] = c_p1(); // ● at step 7 (row 5, mid)
+    ros_before[4][1] = c_up(); // ↑ heading to step 8
 
     let mut ros_after = default_path_board();
-    ros_after[3][1] = c_p1_on_r(); // ●✦ at step 8 (rosette)
+    ros_after[4][1] = c_p1_on_r(); // ●✦ at step 8 rosette (row 4)
 
     lines.extend(render_dual(
         ind,
@@ -463,10 +465,10 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(p(""));
 
     let mut bo_before = default_path_board();
-    bo_before[6][0] = vec![
+    bo_before[1][0] = vec![
         Span::styled(" \u{25cf}".to_string(), sty_p1()),
-        Span::styled("\u{2191}".to_string(), sty_arrow()),
-    ]; // ●↑ piece about to exit
+        Span::styled("\u{2193}".to_string(), sty_arrow()),
+    ]; // ●↓ piece at step 14 (row 1, left), about to exit
 
     let bo_after = default_path_board(); // piece scored → square returns to default
 
@@ -495,10 +497,14 @@ fn help_lines() -> Vec<Line<'static>> {
     lines.push(h("CONTROLS"));
     lines.push(p(""));
     lines.push(key("Space", "Roll the dice"));
-    lines.push(key("\u{2191} / \u{2193}", "Select which piece to move"));
+    lines.push(key(
+        "\u{2191}\u{2193} / \u{2190}\u{2192}",
+        "Select which piece to move",
+    ));
     lines.push(key("Enter", "Confirm the move"));
-    lines.push(key("Esc", "Pause menu"));
+    lines.push(key("H", "Help (this screen)"));
     lines.push(key("L", "Toggle game log"));
+    lines.push(key("Esc", "Pause menu"));
     lines.push(p(""));
     lines.push(p(" In this screen:"));
     lines.push(key("\u{2191}\u{2193} or j/k", "Scroll"));

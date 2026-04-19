@@ -92,11 +92,23 @@ fn handle_action(app: &mut App, action: Action) {
         Action::Back => app.handle_back(),
         Action::MenuUp => app.handle_menu_up(),
         Action::MenuDown => app.handle_menu_down(),
-        Action::SelectPrev => app.handle_select_prev(),
-        Action::SelectNext => app.handle_select_next(),
+        Action::NavUp => app.handle_nav(crate::app::NavDir::Up),
+        Action::NavDown => app.handle_nav(crate::app::NavDir::Down),
+        Action::NavLeft => app.handle_nav(crate::app::NavDir::Left),
+        Action::NavRight => app.handle_nav(crate::app::NavDir::Right),
         Action::ConfirmMove => app.handle_confirm_move(),
         Action::ToggleLog => app.log_visible = !app.log_visible,
-        Action::QuitPrompt => app.open_pause(),
+        Action::OpenHelp => {
+            app.help_scroll = 0;
+            app.screen = crate::app::Screen::Help { from_game: true };
+        }
+        Action::QuitPrompt => {
+            if app.log_visible {
+                app.log_visible = false;
+            } else {
+                app.open_pause();
+            }
+        }
         Action::ScrollUp => app.help_scroll_up(),
         Action::ScrollDown => app.help_scroll_down(),
     }

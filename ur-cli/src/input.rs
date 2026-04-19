@@ -9,11 +9,14 @@ pub enum Action {
     MenuDown,
     Confirm,
     Back,
-    // Gameplay
-    SelectPrev,
-    SelectNext,
+    // Gameplay — 2D grid navigation
+    NavUp,
+    NavDown,
+    NavLeft,
+    NavRight,
     ConfirmMove,
     ToggleLog,
+    OpenHelp,
     QuitPrompt,
     // Scrollable overlays
     ScrollUp,
@@ -47,14 +50,13 @@ pub fn map_key(key: KeyEvent, screen: &Screen) -> Option<Action> {
             _ => None,
         },
         Screen::Game => match key.code {
-            // Up/k = forward along path (closer to scoring).
-            KeyCode::Up | KeyCode::Char('k') => Some(Action::SelectNext),
-            // Down/j/h = backward along path.
-            KeyCode::Down | KeyCode::Char('j') | KeyCode::Left | KeyCode::Char('h') => {
-                Some(Action::SelectPrev)
-            }
+            KeyCode::Up | KeyCode::Char('k') => Some(Action::NavUp),
+            KeyCode::Down | KeyCode::Char('j') => Some(Action::NavDown),
+            KeyCode::Left => Some(Action::NavLeft),
+            KeyCode::Right => Some(Action::NavRight),
             KeyCode::Enter | KeyCode::Char(' ') => Some(Action::ConfirmMove),
             KeyCode::Char('l') => Some(Action::ToggleLog),
+            KeyCode::Char('h') => Some(Action::OpenHelp),
             KeyCode::Esc => Some(Action::QuitPrompt),
             _ => None,
         },
@@ -136,27 +138,39 @@ mod tests {
     }
 
     #[test]
-    fn test_k_maps_to_select_next_in_game() {
+    fn test_k_maps_to_nav_up_in_game() {
         let action = map_key(key(KeyCode::Char('k')), &crate::app::Screen::Game);
-        assert_eq!(action, Some(Action::SelectNext));
+        assert_eq!(action, Some(Action::NavUp));
     }
 
     #[test]
-    fn test_up_maps_to_select_next_in_game() {
+    fn test_up_maps_to_nav_up_in_game() {
         let action = map_key(key(KeyCode::Up), &crate::app::Screen::Game);
-        assert_eq!(action, Some(Action::SelectNext));
+        assert_eq!(action, Some(Action::NavUp));
     }
 
     #[test]
-    fn test_j_maps_to_select_prev_in_game() {
+    fn test_j_maps_to_nav_down_in_game() {
         let action = map_key(key(KeyCode::Char('j')), &crate::app::Screen::Game);
-        assert_eq!(action, Some(Action::SelectPrev));
+        assert_eq!(action, Some(Action::NavDown));
     }
 
     #[test]
-    fn test_h_maps_to_select_prev_in_game() {
+    fn test_left_maps_to_nav_left_in_game() {
+        let action = map_key(key(KeyCode::Left), &crate::app::Screen::Game);
+        assert_eq!(action, Some(Action::NavLeft));
+    }
+
+    #[test]
+    fn test_right_maps_to_nav_right_in_game() {
+        let action = map_key(key(KeyCode::Right), &crate::app::Screen::Game);
+        assert_eq!(action, Some(Action::NavRight));
+    }
+
+    #[test]
+    fn test_h_maps_to_open_help_in_game() {
         let action = map_key(key(KeyCode::Char('h')), &crate::app::Screen::Game);
-        assert_eq!(action, Some(Action::SelectPrev));
+        assert_eq!(action, Some(Action::OpenHelp));
     }
 
     #[test]

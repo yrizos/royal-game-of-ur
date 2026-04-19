@@ -38,11 +38,11 @@ pub fn render(f: &mut Frame, app: &mut App) {
                 ),
                 None => false,
             };
-            let elapsed = app
-                .stats
-                .start_time
-                .map(|t| t.elapsed())
-                .unwrap_or(std::time::Duration::ZERO);
+            let elapsed = match (app.stats.start_time, app.stats.end_time) {
+                (Some(start), Some(end)) => end.duration_since(start),
+                (Some(start), None) => start.elapsed(),
+                _ => std::time::Duration::ZERO,
+            };
             render(
                 f,
                 &GameOverData {

@@ -47,7 +47,7 @@ pub enum PanelDice {
 ///
 /// ```text
 ///   ┌───┐ ┌───┐ ┌───┐ ┌───┐
-///   │ ● │ │ ● │ │   │ │   │
+///   │ ▲ │ │ ▲ │ │   │ │   │
 ///   └───┘ └───┘ └───┘ └───┘
 /// ```
 ///
@@ -69,7 +69,7 @@ fn dice_box_lines(value: u8, color: Color, dim: bool) -> Vec<Line<'static>> {
         mid_spans.push(Span::styled("│", border));
         if i < value {
             mid_spans.push(Span::styled(
-                " ● ",
+                " ▲ ",
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             ));
         } else {
@@ -118,7 +118,7 @@ fn dice_rolling_lines(frame: u32, color: Color) -> Vec<Line<'static>> {
         mid_spans.push(Span::styled("│", border));
         if (pattern >> i) & 1 == 1 {
             mid_spans.push(Span::styled(
-                " ● ",
+                " ▲ ",
                 Style::default().fg(color).add_modifier(Modifier::BOLD),
             ));
         } else {
@@ -149,38 +149,6 @@ pub fn dice_section_lines(panel_dice: PanelDice, color: Color) -> Vec<Line<'stat
         PanelDice::NoMoves(roll) => dice_box_lines(roll.value(), Color::Red, false),
         PanelDice::LastRoll(roll) => dice_box_lines(roll.value(), color, true),
         PanelDice::RosettePending => dice_box_lines(0, Color::DarkGray, true),
-    }
-}
-
-/// Returns 1 `Line` with the status label shown below the dice boxes.
-pub fn dice_label_line(panel_dice: PanelDice, color: Color) -> Line<'static> {
-    match panel_dice {
-        PanelDice::Hidden => Line::from(""),
-        PanelDice::Pending(_) => Line::from(Span::styled(
-            "  rolling...",
-            Style::default().fg(color).add_modifier(Modifier::DIM),
-        )),
-        PanelDice::Animating(_) => {
-            Line::from(Span::styled("  = ?", Style::default().fg(Color::DarkGray)))
-        }
-        PanelDice::Result(roll) => Line::from(Span::styled(
-            format!("  = {}", roll.value()),
-            Style::default()
-                .fg(Color::White)
-                .add_modifier(Modifier::BOLD),
-        )),
-        PanelDice::NoMoves(roll) => Line::from(Span::styled(
-            format!("  = {}  no moves", roll.value()),
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-        )),
-        PanelDice::LastRoll(roll) => Line::from(Span::styled(
-            format!("  = {}  last roll", roll.value()),
-            Style::default().fg(Color::DarkGray),
-        )),
-        PanelDice::RosettePending => Line::from(Span::styled(
-            "  \u{2736} rosette! rolling again...",
-            Style::default().fg(Color::Yellow),
-        )),
     }
 }
 
@@ -280,6 +248,10 @@ pub struct BoardWidget<'a> {
     pub scored: [u8; 2],
     /// True when the selected move enters from pool (highlight pool indicator).
     pub pool_selected: bool,
+    /// True when the cursor is parked on the bear-off slot (highlight scored area).
+    pub bear_off_selected: bool,
+    /// True when the cursor move would score the piece (highlight scored area).
+    pub target_will_score: bool,
     pub animation: Option<&'a crate::animation::Animation>,
     pub cell_w: u16,
     pub cell_h: u16,
@@ -301,13 +273,16 @@ impl<'a> Widget for BoardWidget<'a> {
         let bs = Style::default().fg(Color::DarkGray);
 
         // ── Horizontal borders ─────────────────────────────────────────
+        // Board is rendered top-to-bottom with col 7 at top, col 0 at bottom.
+        // The H-shape gap (cols 4-5, only valid on the middle row) maps to
+        // visual rows 2-3, so the transition borders are at i=2, 3, 4.
         for i in 0..=8u16 {
             let y = by + i * (ch + 1);
             let kind = match i {
                 0 => BK::Top,
-                4 => BK::Tc,
-                5 => BK::Nh,
-                6 => BK::To,
+                2 => BK::Tc,
+                3 => BK::Nh,
+                4 => BK::To,
                 8 => BK::Bot,
                 _ => BK::Fh,
             };
@@ -336,11 +311,19 @@ impl<'a> Widget for BoardWidget<'a> {
             })
         );
 
+        // ── Step-number lookup (1-indexed path position per square) ───
+        let p1_path = self.rules.path_for(Player::Player1);
+        let p2_path = self.rules.path_for(Player::Player2);
+        let step_for = |sq: Square| -> Option<usize> {
+            let path = if sq.row == 0 { p2_path } else { p1_path };
+            path.squares().iter().position(|&s| s == sq).map(|i| i + 1)
+        };
+
         // ── Cell contents ──────────────────────────────────────────────
         for &sq in self.rules.board_shape.valid_squares() {
             let sc = 2u16.saturating_sub(sq.row as u16);
             let cx = bx + sc * (cw + 1) + 1;
-            let cy = by + sq.col as u16 * (ch + 1) + 1;
+            let cy = by + (7 - sq.col) as u16 * (ch + 1) + 1;
 
             let is_selected = self.selected_square == Some(sq);
             let is_target = self.target_square == Some(sq);
@@ -415,12 +398,28 @@ impl<'a> Widget for BoardWidget<'a> {
                 let ss = Style::default().fg(fg).bg(bg);
                 buf.get_mut(sx, sy).set_char(sym).set_style(ss);
             }
+
+            // Step number in top-right corner, very dim
+            if let Some(step) = step_for(sq) {
+                let dim = Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::DIM);
+                let s = step.to_string();
+                let chars: Vec<char> = s.chars().collect();
+                let num_w = chars.len() as u16;
+                if cw >= num_w {
+                    for (i, &c) in chars.iter().enumerate() {
+                        let nx = cx + cw - num_w + i as u16;
+                        buf.get_mut(nx, cy).set_char(c).set_style(dim);
+                    }
+                }
+            }
         }
 
         // ── Vertical borders ───────────────────────────────────────────
         for game_col in 0..8u8 {
             let narrow = game_col == 4 || game_col == 5;
-            let cy_base = by + game_col as u16 * (ch + 1) + 1;
+            let cy_base = by + (7 - game_col) as u16 * (ch + 1) + 1;
 
             for dy in 0..ch {
                 let y = cy_base + dy;
@@ -449,14 +448,13 @@ impl<'a> Widget for BoardWidget<'a> {
             let pc = colors[pi];
             let cx = bx + sc * (cw + 1) + 1;
 
-            // Unplayed (gap col 4)
+            // Unplayed (gap col 4, flipped to visual row 3)
             let count = self.unplayed[pi];
-            if count > 0 {
-                let gy = by + 4 * (ch + 1) + 1;
+            let is_pool_hl = pi == 0 && self.pool_selected;
+            if count > 0 || is_pool_hl {
+                let gy = by + 3 * (ch + 1) + 1;
                 let mid_x = cx + (cw - 1) / 2;
                 let mid_y = gy + (ch.saturating_sub(1)) / 2;
-
-                let is_pool_hl = pi == 0 && self.pool_selected;
                 let bg = if is_pool_hl {
                     COLOR_SELECTED_BG
                 } else {
@@ -472,34 +470,56 @@ impl<'a> Widget for BoardWidget<'a> {
                         }
                     }
                 }
-
-                let sx = if cw >= 5 { mid_x - 1 } else { mid_x };
-                buf.get_mut(sx, mid_y)
-                    .set_char('\u{25cf}')
-                    .set_style(Style::default().fg(pc).bg(bg));
-                if cw >= 5 {
-                    let digit = char::from(b'0' + count);
-                    buf.get_mut(sx + 2, mid_y)
-                        .set_char(digit)
-                        .set_style(Style::default().fg(pc).bg(bg).add_modifier(Modifier::DIM));
+                if count > 0 {
+                    let sx = if cw >= 5 { mid_x - 1 } else { mid_x };
+                    buf.get_mut(sx, mid_y)
+                        .set_char('\u{25cf}')
+                        .set_style(Style::default().fg(pc).bg(bg));
+                    if cw >= 5 {
+                        let digit = char::from(b'0' + count);
+                        buf.get_mut(sx + 2, mid_y)
+                            .set_char(digit)
+                            .set_style(Style::default().fg(pc).bg(bg).add_modifier(Modifier::DIM));
+                    }
                 }
             }
 
-            // Scored (gap col 5)
+            // Scored (gap col 5, flipped to visual row 2)
             let scored = self.scored[pi];
-            if scored > 0 {
-                let gy = by + 5 * (ch + 1) + 1;
+            let is_score_target = pi == 0 && self.target_will_score;
+            let is_bear_off_cursor = pi == 0 && self.bear_off_selected;
+            if scored > 0 || is_score_target || is_bear_off_cursor {
+                let gy = by + 2 * (ch + 1) + 1;
                 let mid_x = cx + (cw - 1) / 2;
                 let mid_y = gy + (ch.saturating_sub(1)) / 2;
+                let bg = if is_score_target {
+                    COLOR_TARGET_BG
+                } else if is_bear_off_cursor {
+                    COLOR_SELECTED_BG
+                } else {
+                    Color::Reset
+                };
+                if is_score_target || is_bear_off_cursor {
+                    let cell_bg = Style::default().bg(bg);
+                    for dy in 0..ch {
+                        for dx in 0..cw {
+                            buf.get_mut(cx + dx, gy + dy)
+                                .set_char(' ')
+                                .set_style(cell_bg);
+                        }
+                    }
+                }
                 let sx = if cw >= 5 { mid_x - 1 } else { mid_x };
-                buf.get_mut(sx, mid_y)
-                    .set_char('\u{25cf}')
-                    .set_style(Style::default().fg(pc).add_modifier(Modifier::BOLD));
-                if cw >= 5 {
-                    let digit = char::from(b'0' + scored);
-                    buf.get_mut(sx + 2, mid_y)
-                        .set_char(digit)
-                        .set_style(Style::default().fg(pc));
+                if scored > 0 {
+                    buf.get_mut(sx, mid_y)
+                        .set_char('\u{25cf}')
+                        .set_style(Style::default().fg(pc).bg(bg).add_modifier(Modifier::BOLD));
+                    if cw >= 5 {
+                        let digit = char::from(b'0' + scored);
+                        buf.get_mut(sx + 2, mid_y)
+                            .set_char(digit)
+                            .set_style(Style::default().fg(pc).bg(bg));
+                    }
                 }
             }
         }
@@ -521,7 +541,7 @@ pub fn render_player_panel(
     scored: u8,
     panel_dice: PanelDice,
     _event_msg: Option<&str>,
-    turn_log: &[String],
+    turn_log: &[Vec<String>],
 ) {
     use crate::ui::styled_box::StyledBox;
 
@@ -552,8 +572,8 @@ pub fn render_player_panel(
             Constraint::Length(1), // [0] turn indicator
             Constraint::Length(1), // [1] blank
             Constraint::Length(3), // [2] dice boxes (3 rows)
-            Constraint::Length(1), // [3] roll label
-            Constraint::Length(1), // [4] pick-a-move prompt
+            Constraint::Length(1), // [3] pick-a-move prompt
+            Constraint::Length(1), // [4] blank margin before turn log
             Constraint::Min(2),    // [5] turn log (grows with available space)
             Constraint::Length(1), // [6] scored
             Constraint::Length(1), // [7] pool
@@ -580,11 +600,7 @@ pub fn render_player_panel(
     let dice_lines = dice_section_lines(panel_dice, color);
     f.render_widget(Paragraph::new(dice_lines), sections[2]);
 
-    // [3] Roll label
-    let label_line = dice_label_line(panel_dice, color);
-    f.render_widget(Paragraph::new(vec![label_line]), sections[3]);
-
-    // [4] Pick-a-move prompt (1 line)
+    // [3] Pick-a-move prompt (1 line)
     let prompt = if matches!(panel_dice, PanelDice::Result(_)) && is_human {
         Span::styled(
             "\u{25b6} pick a move",
@@ -595,21 +611,31 @@ pub fn render_player_panel(
     } else {
         Span::raw("")
     };
-    f.render_widget(Paragraph::new(Line::from(prompt)), sections[4]);
+    f.render_widget(Paragraph::new(Line::from(prompt)), sections[3]);
+    // [4] blank margin — separates dice area from turn log
 
-    // [5] Turn log — shows all events this turn (roll, moves, captures, etc.)
+    // [5] Turn log — most recent turn at top (white), older turns below (dark gray)
     {
         use ratatui::widgets::{List, ListItem};
+        let mut all_lines: Vec<(String, Color)> = Vec::new();
+        for (i, turn) in turn_log.iter().rev().enumerate() {
+            let c = if i == 0 {
+                Color::White
+            } else {
+                Color::DarkGray
+            };
+            if i > 0 {
+                all_lines.push((String::new(), Color::DarkGray));
+            }
+            for line in turn {
+                all_lines.push((line.clone(), c));
+            }
+        }
         let available = sections[5].height as usize;
-        let skip = turn_log.len().saturating_sub(available);
-        let items: Vec<ListItem> = turn_log[skip..]
-            .iter()
-            .map(|line| {
-                ListItem::new(Span::styled(
-                    line.clone(),
-                    Style::default().fg(Color::White),
-                ))
-            })
+        let items: Vec<ListItem> = all_lines
+            .into_iter()
+            .take(available)
+            .map(|(text, c)| ListItem::new(Span::styled(text, Style::default().fg(c))))
             .collect();
         f.render_widget(List::new(items), sections[5]);
     }
@@ -714,7 +740,7 @@ pub fn render_status_bar(
         moves, time_str, ai_str, log_entry
     );
     let right = format!(
-        "  \u{2191}\u{2193}=Select  Enter=Move  Esc=Pause  {}",
+        "  \u{2191}\u{2193}=Select  Enter=Move  Esc=Pause  {}  [H] help",
         log_hint
     );
 
@@ -746,13 +772,14 @@ pub fn render_game(f: &mut Frame, app: &App) {
     let board_w = 3 * cw + 4;
     let board_h = 8 * ch + 9;
 
-    let panel_w = main.width.saturating_sub(board_w) / 2;
+    let board_col_w = board_w + 4; // 2-char margin on each side
+    let panel_w = main.width.saturating_sub(board_col_w) / 2;
 
     let cols = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
             Constraint::Length(panel_w),
-            Constraint::Length(board_w),
+            Constraint::Length(board_col_w),
             Constraint::Min(panel_w),
         ])
         .split(main);
@@ -766,6 +793,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
 
     let path = rules.path_for(game_state.current_player);
     let pool_selected = app.cursor_path_pos == 0;
+    let bear_off_selected = app.cursor_path_pos == crate::app::CURSOR_BEAR_OFF;
     let selected_square = if app.cursor_path_pos == 0 {
         None
     } else {
@@ -776,6 +804,9 @@ pub fn render_game(f: &mut Frame, app: &App) {
         PieceLocation::OnBoard(sq) => Some(sq),
         _ => None,
     });
+    let target_will_score = cursor_move
+        .map(|mv| matches!(mv.to, PieceLocation::Scored))
+        .unwrap_or(false);
 
     // Player panels
     render_player_panel(
@@ -805,8 +836,8 @@ pub fn render_game(f: &mut Frame, app: &App) {
         &app.turn_log[1],
     );
 
-    // Column headers centered above each board column
-    let header_y = cols[1].y;
+    // Column headers — 1 blank row above for breathing room
+    let header_y = cols[1].y + 1;
     if header_y < cols[1].y + cols[1].height {
         let bx_center = cols[1].x + (cols[1].width.saturating_sub(board_w)) / 2;
         let hbuf = f.buffer_mut();
@@ -830,12 +861,12 @@ pub fn render_game(f: &mut Frame, app: &App) {
         }
     }
 
-    // Board area (below header, vertically centered in remaining space)
+    // Board area (below blank + header rows, vertically centered in remaining space)
     let below_header = main.height.saturating_sub(1);
     let vert_pad = below_header.saturating_sub(board_h) / 2;
     let board_area = Rect::new(
         cols[1].x,
-        cols[1].y + 1 + vert_pad,
+        cols[1].y + 2 + vert_pad,
         cols[1].width,
         board_h.min(below_header),
     );
@@ -848,6 +879,8 @@ pub fn render_game(f: &mut Frame, app: &App) {
         unplayed: game_state.unplayed,
         scored: game_state.scored,
         pool_selected,
+        bear_off_selected,
+        target_will_score,
         animation: app.animation.as_ref(),
         cell_w: cw,
         cell_h: ch,
@@ -1116,18 +1149,6 @@ mod tests {
     }
 
     #[test]
-    fn test_panel_dice_hidden_label_is_blank() {
-        let label = dice_label_line(PanelDice::Hidden, COLOR_P1);
-        // Label line exists but contains only whitespace/empty spans.
-        let content: String = label.spans.iter().map(|s| s.content.as_ref()).collect();
-        assert!(
-            content.trim().is_empty(),
-            "hidden dice label should be blank, got: {:?}",
-            content
-        );
-    }
-
-    #[test]
     fn test_render_player_panel_shows_event_msg_in_buffer() {
         use ratatui::{backend::TestBackend, Terminal};
         let backend = TestBackend::new(40, 30);
@@ -1145,7 +1166,10 @@ mod tests {
                     0,
                     PanelDice::LastRoll(Dice(3)),
                     Some("captured!"),
-                    &["rolled 3".to_string(), "◆ captured at step 10".to_string()],
+                    &[vec![
+                        "rolled 3".to_string(),
+                        "captured at step 10".to_string(),
+                    ]],
                 );
             })
             .unwrap();

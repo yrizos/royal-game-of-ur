@@ -69,6 +69,85 @@ const FORFEIT_DISPLAY_MS: u64 = 1000;
 /// Difficulty level maps to expectiminimax search depth.
 pub const DIFFICULTIES: [(&str, u32); 3] = [("Easy", 2), ("Medium", 4), ("Hard", 6)];
 
+/// Cursor position representing the off-board "bearing off" (scored) slot.
+/// Positions 1-14 are on-board path steps; 0 is the pool; 15 is the scoring area.
+pub const CURSOR_BEAR_OFF: usize = 15;
+
+/// 2-D navigation grid: NAV_GRID[visual_row][col] → cursor_path_pos.
+/// Visual row 0 = top of board (finish end); row 7 = bottom (entry end).
+/// Col 0 = left (player private lane + virtual off-board slots).
+/// Col 1 = right (shared middle column).
+///
+/// Board layout after vertical flip:
+///   row 0: [step 13, step 12]
+///   row 1: [step 14✦, step 11]
+///   row 2: [BEAR_OFF, step 10]   ← H-gap: virtual slots on left
+///   row 3: [pool (0), step 9]    ← H-gap
+///   row 4: [step 1, step 8✦]
+///   row 5: [step 2, step 7]
+///   row 6: [step 3, step 6]
+///   row 7: [step 4✦, step 5]
+const NAV_GRID: [[usize; 2]; 8] = [
+    [13, 12],
+    [14, 11],
+    [CURSOR_BEAR_OFF, 10],
+    [0, 9],
+    [1, 8],
+    [2, 7],
+    [3, 6],
+    [4, 5],
+];
+
+/// Direction for 2-D cursor navigation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NavDir {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+/// Returns the (row, col) grid coordinates for a cursor position, or `None`
+/// if `pos` is not represented in the grid.
+fn cursor_to_grid(pos: usize) -> Option<(usize, usize)> {
+    for (row, row_vals) in NAV_GRID.iter().enumerate() {
+        for (col, &cell) in row_vals.iter().enumerate() {
+            if cell == pos {
+                return Some((row, col));
+            }
+        }
+    }
+    None
+}
+
+/// Returns the cursor position reached by moving one step in `dir` from `pos`.
+/// UP/DOWN wrap across columns at the board edges.
+pub fn nav_cursor(pos: usize, dir: NavDir) -> usize {
+    let (row, col) = match cursor_to_grid(pos) {
+        Some(p) => p,
+        None => return pos,
+    };
+    let (new_row, new_col) = match dir {
+        NavDir::Left => (row, col.saturating_sub(1)),
+        NavDir::Right => (row, (col + 1).min(1)),
+        NavDir::Up => {
+            if row > 0 {
+                (row - 1, col)
+            } else {
+                (0, 1 - col) // wrap: swap column at top row
+            }
+        }
+        NavDir::Down => {
+            if row < 7 {
+                (row + 1, col)
+            } else {
+                (7, 1 - col) // wrap: swap column at bottom row
+            }
+        }
+    };
+    NAV_GRID[new_row][new_col]
+}
+
 /// Game statistics accumulated during play.
 #[derive(Debug, Default)]
 #[allow(dead_code)]
@@ -114,9 +193,10 @@ pub struct App {
     pub last_roll: [Option<Dice>; 2],
     /// Last notable event per player (capture / rosette / score). Shown below dice.
     pub last_event: [Option<String>; 2],
-    /// All events that occurred during the current turn, per player.
-    /// Cleared at the start of each new turn (rosette re-rolls extend the same turn).
-    pub turn_log: [Vec<String>; 2],
+    /// Per-player turn history: up to 3 past turns, each a list of event strings.
+    /// The last element is the current (in-progress) turn. Rosette re-rolls extend
+    /// the current turn rather than starting a new one.
+    pub turn_log: [Vec<Vec<String>>; 2],
     /// Monotonically increasing counter, incremented every animation tick. Used to
     /// drive UI animations (e.g. rolling dice pattern) independently of game state.
     pub frame_count: u32,
@@ -148,7 +228,7 @@ impl App {
             rosette_reroll: false,
             last_roll: [None, None],
             last_event: [None, None],
-            turn_log: [Vec::new(), Vec::new()],
+            turn_log: [vec![vec![]], vec![vec![]]],
             frame_count: 0,
         }
     }
@@ -201,7 +281,7 @@ impl App {
         self.ai_spinner_frame = 0;
         self.last_roll = [None, None];
         self.last_event = [None, None];
-        self.turn_log = [Vec::new(), Vec::new()];
+        self.turn_log = [vec![vec![]], vec![vec![]]];
         self.rosette_reroll = false;
         self.forfeit_after = None;
         self.screen = Screen::Game;
@@ -272,7 +352,7 @@ impl App {
             Screen::PauseMenu { .. } => self.screen = Screen::Game,
             Screen::Help { from_game } => {
                 if *from_game {
-                    self.screen = Screen::PauseMenu { selected: 0 };
+                    self.screen = Screen::Game;
                 } else {
                     self.screen = Screen::Title;
                 }
@@ -369,24 +449,14 @@ impl App {
     }
 
     /// Moves the cursor one step backward along the path (toward the pool).
-    /// Clamped at 0 — never wraps.
-    pub fn handle_select_prev(&mut self) {
-        if self.cursor_path_pos > 0 {
-            self.cursor_path_pos -= 1;
+    /// Only active when legal moves are available (i.e. human player's turn).
+    /// Moves the cursor one step in `dir` on the 2-D board grid.
+    /// Only active when legal moves are available (i.e. human player's turn).
+    pub fn handle_nav(&mut self, dir: NavDir) {
+        if self.legal_moves.is_empty() {
+            return;
         }
-    }
-
-    /// Moves the cursor one step forward along the path (toward the exit).
-    /// Clamped at the last path square — never wraps.
-    pub fn handle_select_next(&mut self) {
-        let max = match &self.game_state {
-            Some(gs) => gs.rules.path_for(gs.current_player).len(),
-            None => return,
-        };
-        // cursor_path_pos 0 = pool, 1..=max = path[0..max-1]
-        if self.cursor_path_pos < max {
-            self.cursor_path_pos += 1;
-        }
+        self.cursor_path_pos = nav_cursor(self.cursor_path_pos, dir);
     }
 
     /// Confirms the move at the current cursor position, if one exists.
@@ -414,11 +484,6 @@ impl App {
             ur_core::state::PieceLocation::OnBoard(sq)
         };
         self.legal_moves.iter().find(|mv| mv.from == from)
-    }
-
-    /// Resets the cursor to the pool (position 0).
-    fn snap_cursor_to_start(&mut self) {
-        self.cursor_path_pos = 0;
     }
 
     /// Applies a move to the current game state and handles turn transitions.
@@ -451,36 +516,49 @@ impl App {
                     self.stats.captures[player_num - 1] += 1;
                     self.log.push(LogEntry {
                         player: Some(current_player),
-                        text: format!("captured at step {}", step),
+                        text: format!("Captured piece at {}!", step),
                     });
-                    let t = format!("\u{25c6} captured at step {}", step);
-                    self.turn_log[player_idx].push(t.clone());
+                    let t = format!("Captured piece at {}!", step);
+                    if let Some(cur) = self.turn_log[player_idx].last_mut() {
+                        cur.push(t.clone());
+                    }
                     Some(t)
                 } else if result.landed_on_rosette {
                     self.log.push(LogEntry {
                         player: Some(current_player),
-                        text: format!("rosette at step {} — extra turn!", step),
+                        text: format!("Moved to rosette at {}", step),
                     });
-                    let t = format!("\u{2736} rosette at step {} — bonus turn", step);
-                    self.turn_log[player_idx].push(t.clone());
+                    self.log.push(LogEntry {
+                        player: Some(current_player),
+                        text: "Extra turn!".to_string(),
+                    });
+                    let t = format!("Moved to rosette at {}", step);
+                    if let Some(cur) = self.turn_log[player_idx].last_mut() {
+                        cur.push(t.clone());
+                        cur.push("Extra turn!".to_string());
+                    }
                     Some(t)
                 } else {
                     self.log.push(LogEntry {
                         player: Some(current_player),
-                        text: format!("moved to step {}", step),
+                        text: format!("Moved to {}", step),
                     });
-                    let t = format!("\u{2192} step {}", step);
-                    self.turn_log[player_idx].push(t.clone());
+                    let t = format!("Moved to {}", step);
+                    if let Some(cur) = self.turn_log[player_idx].last_mut() {
+                        cur.push(t.clone());
+                    }
                     Some(t)
                 }
             }
             ur_core::state::PieceLocation::Scored => {
                 self.log.push(LogEntry {
                     player: Some(current_player),
-                    text: "scored a piece!".to_string(),
+                    text: "Scored!".to_string(),
                 });
-                let t = "\u{2713} scored!".to_string();
-                self.turn_log[player_idx].push(t.clone());
+                let t = "Scored!".to_string();
+                if let Some(cur) = self.turn_log[player_idx].last_mut() {
+                    cur.push(t.clone());
+                }
                 Some(t)
             }
             _ => None,
@@ -492,7 +570,6 @@ impl App {
         self.last_roll[player_idx] = self.dice_roll;
         self.dice_roll = None;
         self.legal_moves.clear();
-        self.cursor_path_pos = 0;
 
         if result.game_over {
             self.stats.end_time = Some(std::time::Instant::now());
@@ -558,6 +635,13 @@ impl App {
         if self.dice_roll.is_none() {
             return;
         }
+        // Push "Rolled N" to the turn log now that the animation is complete.
+        if let (Some(roll), Some(gs)) = (self.dice_roll, self.game_state.as_ref()) {
+            let idx = gs.current_player.index();
+            if let Some(current) = self.turn_log[idx].last_mut() {
+                current.push(format!("Rolled {}", roll.value()));
+            }
+        }
         // If the AI is still computing, the dice-roll animation has finished but the
         // chosen move isn't ready yet. Let poll_ai_move handle the transition.
         if self.ai_thinking {
@@ -566,13 +650,16 @@ impl App {
         if let Some(roll) = self.dice_roll {
             if let Some(gs) = &self.game_state {
                 let moves = gs.legal_moves(roll);
+                let current_player = gs.current_player;
+                let idx = current_player.index();
                 if moves.is_empty() {
                     self.log.push(LogEntry {
-                        player: Some(gs.current_player),
-                        text: format!("rolled {} — no moves, passing turn", roll.value()),
+                        player: Some(current_player),
+                        text: "No moves!".to_string(),
                     });
-                    self.turn_log[gs.current_player.index()]
-                        .push("no moves — passing turn".to_string());
+                    if let Some(current) = self.turn_log[idx].last_mut() {
+                        current.push("No moves!".to_string());
+                    }
                     // Show the no-moves (red) state for FORFEIT_DISPLAY_MS before
                     // auto-advancing. dice_roll is kept so the panel renders red.
                     self.forfeit_after = Some(
@@ -581,7 +668,7 @@ impl App {
                     );
                 } else {
                     self.legal_moves = moves;
-                    self.snap_cursor_to_start();
+                    self.cursor_path_pos = self.cursor_path_pos.min(CURSOR_BEAR_OFF);
                 }
             }
         }
@@ -599,13 +686,13 @@ impl App {
         let roll = ur_core::dice::Dice::roll(&mut self.rng);
         self.log.push(LogEntry {
             player: Some(Player::Player2),
-            text: format!("rolled {}", roll.value()),
+            text: format!("Rolled {}", roll.value()),
         });
         self.dice_roll = Some(roll);
-        if !self.rosette_reroll {
-            self.turn_log[1].clear();
+        self.turn_log[1].push(vec![]);
+        if self.turn_log[1].len() > 5 {
+            self.turn_log[1].remove(0);
         }
-        self.turn_log[1].push(format!("rolled {}", roll.value()));
         self.last_roll[gs.current_player.index()] = Some(roll);
 
         // Play the same dice-roll animation as the human so the AI turn is
@@ -619,12 +706,8 @@ impl App {
 
         let moves = gs.legal_moves(roll);
         if moves.is_empty() {
-            self.log.push(LogEntry {
-                player: Some(Player::Player2),
-                text: "no moves — passing turn".to_string(),
-            });
             // No thread needed — on_animation_done will detect empty moves and
-            // set forfeit_after once the dice animation finishes.
+            // log "No moves!" + set forfeit_after once the dice animation finishes.
             return;
         }
 
@@ -664,7 +747,7 @@ impl App {
         if !ready {
             return;
         }
-        let is_rosette_reroll = self.rosette_reroll;
+        let _is_rosette_reroll = self.rosette_reroll;
         self.pending_roll = false;
         self.rosette_reroll = false;
         self.roll_after = None;
@@ -677,12 +760,12 @@ impl App {
         self.dice_roll = Some(final_value);
         self.log.push(LogEntry {
             player: Some(Player::Player1),
-            text: format!("rolled {}", final_value.value()),
+            text: format!("Rolled {}", final_value.value()),
         });
-        if !is_rosette_reroll {
-            self.turn_log[0].clear();
+        self.turn_log[0].push(vec![]);
+        if self.turn_log[0].len() > 5 {
+            self.turn_log[0].remove(0);
         }
-        self.turn_log[0].push(format!("rolled {}", final_value.value()));
     }
 
     /// Called every tick. If `forfeit_after` has elapsed, forfeits the current
@@ -844,8 +927,8 @@ mod log_tests {
         let last = app.log.last().unwrap();
         assert_eq!(last.player, Some(Player::Player2));
         assert!(
-            last.text.contains("rolled"),
-            "expected 'rolled' in: {}",
+            last.text.contains("Rolled"),
+            "expected 'Rolled' in: {}",
             last.text
         );
     }
@@ -859,8 +942,8 @@ mod log_tests {
         let has_p1_roll = app
             .log
             .iter()
-            .any(|e| e.player == Some(Player::Player1) && e.text.contains("rolled"));
-        assert!(has_p1_roll, "expected a Player1 rolled entry");
+            .any(|e| e.player == Some(Player::Player1) && e.text.contains("Rolled"));
+        assert!(has_p1_roll, "expected a Player1 Rolled entry");
     }
 }
 
@@ -984,51 +1067,205 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn test_select_next_advances_cursor_along_path() {
-        let mut app = App::new();
-        app.game_state = Some(ur_core::state::GameState::new(
-            &ur_core::state::GameRules::finkel(),
-        ));
-        app.cursor_path_pos = 0;
-        app.handle_select_next();
-        assert_eq!(app.cursor_path_pos, 1);
-        app.handle_select_next();
-        assert_eq!(app.cursor_path_pos, 2);
-    }
+    // ── nav_cursor grid navigation tests ──────────────────────────────────────
 
-    #[test]
-    fn test_select_next_clamps_at_path_end() {
+    // Helper: make an App with legal moves so handle_nav is not a no-op.
+    fn app_with_moves() -> App {
         let mut app = App::new();
-        let rules = ur_core::state::GameRules::finkel();
-        let gs = ur_core::state::GameState::new(&rules);
-        let path_len = rules.path_for(gs.current_player).len(); // 14
-        app.cursor_path_pos = path_len;
+        let gs = ur_core::state::GameState::new(&ur_core::state::GameRules::finkel());
+        app.legal_moves = gs.legal_moves(ur_core::dice::Dice(1));
         app.game_state = Some(gs);
-        app.handle_select_next();
-        assert_eq!(
-            app.cursor_path_pos, path_len,
-            "must not go past last square"
-        );
+        app
+    }
+
+    // User-specified cases ────────────────────────────────────────────────────
+
+    #[test]
+    fn test_nav_pos1_right_goes_to_pos8() {
+        assert_eq!(nav_cursor(1, NavDir::Right), 8);
     }
 
     #[test]
-    fn test_select_prev_decrements_cursor() {
+    fn test_nav_pos9_left_goes_to_pool() {
+        assert_eq!(nav_cursor(9, NavDir::Left), 0);
+    }
+
+    #[test]
+    fn test_nav_pos10_left_goes_to_bear_off() {
+        assert_eq!(nav_cursor(10, NavDir::Left), CURSOR_BEAR_OFF);
+    }
+
+    #[test]
+    fn test_nav_pos4_right_goes_to_pos5() {
+        assert_eq!(nav_cursor(4, NavDir::Right), 5);
+    }
+
+    #[test]
+    fn test_nav_pos4_down_goes_to_pos5() {
+        assert_eq!(nav_cursor(4, NavDir::Down), 5);
+    }
+
+    #[test]
+    fn test_nav_pos12_left_goes_to_pos13() {
+        assert_eq!(nav_cursor(12, NavDir::Left), 13);
+    }
+
+    #[test]
+    fn test_nav_pos12_up_goes_to_pos13() {
+        assert_eq!(nav_cursor(12, NavDir::Up), 13);
+    }
+
+    #[test]
+    fn test_nav_pool_right_goes_to_pos9() {
+        assert_eq!(nav_cursor(0, NavDir::Right), 9);
+    }
+
+    #[test]
+    fn test_nav_bear_off_right_goes_to_pos10() {
+        assert_eq!(nav_cursor(CURSOR_BEAR_OFF, NavDir::Right), 10);
+    }
+
+    #[test]
+    fn test_nav_bear_off_down_goes_to_pool() {
+        assert_eq!(nav_cursor(CURSOR_BEAR_OFF, NavDir::Down), 0);
+    }
+
+    #[test]
+    fn test_nav_pool_up_goes_to_bear_off() {
+        assert_eq!(nav_cursor(0, NavDir::Up), CURSOR_BEAR_OFF);
+    }
+
+    // Horizontal (left/right) navigation ─────────────────────────────────────
+
+    #[test]
+    fn test_nav_horizontal_pairs() {
+        // Each pair: left-col pos ↔ right-col pos at same visual row.
+        let pairs = [
+            (13usize, 12usize),    // row 0
+            (14, 11),              // row 1
+            (CURSOR_BEAR_OFF, 10), // row 2
+            (0, 9),                // row 3
+            (1, 8),                // row 4
+            (2, 7),                // row 5
+            (3, 6),                // row 6
+            (4, 5),                // row 7
+        ];
+        for (left, right) in pairs {
+            assert_eq!(nav_cursor(left, NavDir::Right), right, "{left} right");
+            assert_eq!(nav_cursor(right, NavDir::Left), left, "{right} left");
+        }
+    }
+
+    #[test]
+    fn test_nav_left_from_leftmost_stays() {
+        for pos in [13, 14, CURSOR_BEAR_OFF, 0, 1, 2, 3, 4] {
+            assert_eq!(
+                nav_cursor(pos, NavDir::Left),
+                pos,
+                "pos {pos} already leftmost"
+            );
+        }
+    }
+
+    #[test]
+    fn test_nav_right_from_rightmost_stays() {
+        for pos in [12, 11, 10, 9, 8, 7, 6, 5] {
+            assert_eq!(
+                nav_cursor(pos, NavDir::Right),
+                pos,
+                "pos {pos} already rightmost"
+            );
+        }
+    }
+
+    // Vertical (up/down) navigation within columns ────────────────────────────
+
+    #[test]
+    fn test_nav_up_left_column() {
+        // Left col (col 0): rows 0-7 → positions [13,14,BEAR,0,1,2,3,4]
+        let left_col = [13, 14, CURSOR_BEAR_OFF, 0, 1, 2, 3, 4];
+        for i in 1..8 {
+            assert_eq!(
+                nav_cursor(left_col[i], NavDir::Up),
+                left_col[i - 1],
+                "up from left_col[{i}]={}",
+                left_col[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_nav_down_left_column() {
+        let left_col = [13, 14, CURSOR_BEAR_OFF, 0, 1, 2, 3, 4];
+        for i in 0..7 {
+            assert_eq!(
+                nav_cursor(left_col[i], NavDir::Down),
+                left_col[i + 1],
+                "down from left_col[{i}]={}",
+                left_col[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_nav_up_right_column() {
+        // Right col (col 1): rows 0-7 → positions [12,11,10,9,8,7,6,5]
+        let right_col = [12, 11, 10, 9, 8, 7, 6, 5];
+        for i in 1..8 {
+            assert_eq!(
+                nav_cursor(right_col[i], NavDir::Up),
+                right_col[i - 1],
+                "up from right_col[{i}]={}",
+                right_col[i]
+            );
+        }
+    }
+
+    #[test]
+    fn test_nav_down_right_column() {
+        let right_col = [12, 11, 10, 9, 8, 7, 6, 5];
+        for i in 0..7 {
+            assert_eq!(
+                nav_cursor(right_col[i], NavDir::Down),
+                right_col[i + 1],
+                "down from right_col[{i}]={}",
+                right_col[i]
+            );
+        }
+    }
+
+    // Edge wraps ──────────────────────────────────────────────────────────────
+
+    #[test]
+    fn test_nav_up_wraps_at_top_row() {
+        // Top row (row 0): up wraps to other column at row 0.
+        assert_eq!(nav_cursor(13, NavDir::Up), 12, "step 13 up → step 12");
+        assert_eq!(nav_cursor(12, NavDir::Up), 13, "step 12 up → step 13");
+    }
+
+    #[test]
+    fn test_nav_down_wraps_at_bottom_row() {
+        // Bottom row (row 7): down wraps to other column at row 7.
+        assert_eq!(nav_cursor(4, NavDir::Down), 5, "step 4 down → step 5");
+        assert_eq!(nav_cursor(5, NavDir::Down), 4, "step 5 down → step 4");
+    }
+
+    // Guard: no movement when no legal moves ──────────────────────────────────
+
+    #[test]
+    fn test_handle_nav_no_op_when_no_legal_moves() {
         let mut app = App::new();
-        app.game_state = Some(ur_core::state::GameState::new(
-            &ur_core::state::GameRules::finkel(),
-        ));
         app.cursor_path_pos = 3;
-        app.handle_select_prev();
-        assert_eq!(app.cursor_path_pos, 2);
+        app.handle_nav(NavDir::Right); // legal_moves empty → no change
+        assert_eq!(app.cursor_path_pos, 3);
     }
 
     #[test]
-    fn test_select_prev_clamps_at_pool() {
-        let mut app = App::new();
-        app.cursor_path_pos = 0;
-        app.handle_select_prev();
-        assert_eq!(app.cursor_path_pos, 0, "must not go below pool position");
+    fn test_handle_nav_moves_cursor_when_legal_moves_present() {
+        let mut app = app_with_moves();
+        app.cursor_path_pos = 1;
+        app.handle_nav(NavDir::Right);
+        assert_eq!(app.cursor_path_pos, 8);
     }
 
     #[test]
