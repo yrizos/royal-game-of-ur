@@ -17,12 +17,10 @@ use crate::app::App;
 
 // ── Color constants ──────────────────────────────────────────────────────────
 
-pub const COLOR_P1: Color = Color::LightBlue;
-pub const COLOR_P2: Color = Color::LightRed;
-pub const COLOR_ROSETTE_BG: Color = Color::Rgb(61, 43, 31);
-pub const COLOR_ROSETTE_FG: Color = Color::Yellow;
-const COLOR_SELECTED_BG: Color = Color::Rgb(30, 60, 30);
-const COLOR_TARGET_BG: Color = Color::Rgb(40, 20, 60);
+use super::theme::{
+    COLOR_ACCENT, COLOR_P1, COLOR_P2, COLOR_ROSETTE_BG, COLOR_SELECTED_BG, COLOR_TARGET_BG,
+};
+const COLOR_ROSETTE_FG: Color = COLOR_ACCENT;
 
 /// Describes what the dice widget inside a player panel should show.
 #[derive(Debug, Clone, Copy, PartialEq)]

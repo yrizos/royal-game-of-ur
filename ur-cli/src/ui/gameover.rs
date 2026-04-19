@@ -1,6 +1,7 @@
+use super::theme::{COLOR_ACCENT, COLOR_DIM, COLOR_P1, COLOR_P2, COLOR_SUB};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::Paragraph,
     Frame,
@@ -33,12 +34,12 @@ pub fn render(f: &mut Frame, data: &GameOverData) {
         .split(area);
 
     let gold = Style::default()
-        .fg(Color::Yellow)
+        .fg(COLOR_ACCENT)
         .add_modifier(Modifier::BOLD);
-    let sub = Style::default().fg(Color::Gray);
-    let dim = Style::default().fg(Color::DarkGray);
-    let blue = Style::default().fg(Color::LightBlue);
-    let red = Style::default().fg(Color::LightRed);
+    let sub = Style::default().fg(COLOR_SUB);
+    let dim = Style::default().fg(COLOR_DIM);
+    let blue = Style::default().fg(COLOR_P1);
+    let red = Style::default().fg(COLOR_P2);
 
     let winner_text = if data.winner_is_human {
         "You win!"
@@ -46,13 +47,9 @@ pub fn render(f: &mut Frame, data: &GameOverData) {
         "AI wins!"
     };
     let winner_style = if data.winner_is_human {
-        Style::default()
-            .fg(Color::LightBlue)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(COLOR_P1).add_modifier(Modifier::BOLD)
     } else {
-        Style::default()
-            .fg(Color::LightRed)
-            .add_modifier(Modifier::BOLD)
+        Style::default().fg(COLOR_P2).add_modifier(Modifier::BOLD)
     };
 
     let secs = data.elapsed.as_secs();

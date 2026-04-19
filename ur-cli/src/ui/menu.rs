@@ -1,3 +1,4 @@
+use super::theme::{COLOR_ACCENT, COLOR_DIM, COLOR_P1, COLOR_P2, COLOR_SUB};
 use crate::app::{DiceOffState, DIFFICULTIES};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
@@ -21,10 +22,10 @@ pub fn render_difficulty(f: &mut Frame, selected: usize) {
         .split(area);
 
     let gold = Style::default()
-        .fg(Color::Yellow)
+        .fg(COLOR_ACCENT)
         .add_modifier(Modifier::BOLD);
-    let sub = Style::default().fg(Color::Gray);
-    let dim = Style::default().fg(Color::DarkGray);
+    let sub = Style::default().fg(COLOR_SUB);
+    let dim = Style::default().fg(COLOR_DIM);
 
     let descriptions = [
         "Casual play — AI looks 2 moves ahead",
@@ -43,9 +44,9 @@ pub fn render_difficulty(f: &mut Frame, selected: usize) {
                 Line::from(vec![
                     Span::styled(
                         format!("▶ {label:<8}"),
-                        Style::default().fg(Color::Black).bg(Color::Yellow),
+                        Style::default().fg(Color::Black).bg(COLOR_ACCENT),
                     ),
-                    Span::styled(format!("  {desc}"), Style::default().fg(Color::Yellow)),
+                    Span::styled(format!("  {desc}"), Style::default().fg(COLOR_ACCENT)),
                 ])
                 .alignment(Alignment::Center),
             );
@@ -80,12 +81,12 @@ pub fn render_dice_off(f: &mut Frame, state: &DiceOffState) {
         .split(area);
 
     let gold = Style::default()
-        .fg(Color::Yellow)
+        .fg(COLOR_ACCENT)
         .add_modifier(Modifier::BOLD);
-    let blue = Style::default().fg(Color::LightBlue);
-    let red = Style::default().fg(Color::LightRed);
-    let sub = Style::default().fg(Color::Gray);
-    let dim = Style::default().fg(Color::DarkGray);
+    let blue = Style::default().fg(COLOR_P1);
+    let red = Style::default().fg(COLOR_P2);
+    let sub = Style::default().fg(COLOR_SUB);
+    let dim = Style::default().fg(COLOR_DIM);
 
     fn dice_display(d: ur_core::dice::Dice) -> String {
         let filled = "●".repeat(d.value() as usize);

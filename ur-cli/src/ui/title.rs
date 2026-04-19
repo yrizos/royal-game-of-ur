@@ -1,3 +1,4 @@
+use super::theme::{COLOR_ACCENT, COLOR_DIM, COLOR_SUB};
 use ratatui::{
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
@@ -35,9 +36,9 @@ pub fn render(f: &mut Frame, selected: usize) {
         .split(area);
     let inner = chunks[1];
 
-    let gold = Style::default().fg(Color::Yellow);
-    let dim = Style::default().fg(Color::DarkGray);
-    let sub = Style::default().fg(Color::Gray);
+    let gold = Style::default().fg(COLOR_ACCENT);
+    let dim = Style::default().fg(COLOR_DIM);
+    let sub = Style::default().fg(COLOR_SUB);
 
     let mut lines: Vec<Line> = Vec::new();
 
@@ -61,7 +62,7 @@ pub fn render(f: &mut Frame, selected: usize) {
     let menu_items = ["New Game", "How to Play", "Quit"];
     for (i, item) in menu_items.iter().enumerate() {
         let style = if i == selected {
-            Style::default().fg(Color::Black).bg(Color::Yellow)
+            Style::default().fg(Color::Black).bg(COLOR_ACCENT)
         } else {
             sub
         };
