@@ -18,7 +18,7 @@ Race all 7 pieces through a 14-step path and off the board before the AI does th
 
 ```
 Space        Roll the dice
-↑↓ / ←→     Select which piece to move
+↑↓ / ←→      Select which piece to move
 Enter        Confirm the move
 H            Help
 L            Toggle game log
@@ -96,6 +96,9 @@ Steps 1-4 are your private lane (left column). Steps 5-12 are the shared column 
 │   │   └── state.rs           # game state, legal moves, move application
 │   └── tests/
 │       └── simulation.rs      # 1000-game randomized simulation
+├── docs/superpowers/
+│   ├── specs/                 # design specs (write before implementing)
+│   └── plans/                 # implementation plans (write before coding)
 ├── Cargo.toml                 # workspace root
 ├── Justfile                   # task runner
 └── SPEC.md                    # full Finkel ruleset specification

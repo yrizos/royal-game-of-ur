@@ -1,121 +1,77 @@
 # Royal Game of Ur
 
-A Rust workspace containing a reusable game logic library and a terminal application for the Royal Game of Ur, one of the oldest known board games (circa 2600 BCE, Mesopotamia).
+Review `README.md` for the project overview, structure, rules, and available `just` commands. Refer to `SPEC.md` for the complete Finkel ruleset. This document defines additional guidance required for LLM interaction.
 
-## Project Structure
+## Architecture Boundary
 
-```
-royal-game-of-ur/
-  ur-core/    # Library crate: pure game logic, no I/O
-  ur-cli/     # Binary crate: ratatui terminal frontend, depends on ur-core
-```
-
-## Architecture
-
-`ur-core` is the single source of truth for all game rules. It contains board geometry, piece paths, legal move generation, move application, win detection, and the AI opponent. It has no dependencies on rendering, input, audio, or any platform API. It must compile to any Rust target including WebAssembly.
-
-`ur-cli` is a thin terminal frontend built with ratatui and crossterm. It renders the board, handles keyboard input, runs animations (dice rolls, piece movement, captures), and calls `ur-core` for every game logic decision. It never computes whether a move is legal, never checks for captures, and never decides who wins. It asks `ur-core`.
-
-## Ruleset
-
-The default ruleset is the Finkel reconstruction. See SPEC.md for the complete rules including board geometry, piece paths, rosette behavior, dice mechanics, and capture rules.
-
-Key facts for quick reference:
-
-- Board: 20 squares on a 3x8 grid with 4 squares removed (row 0 and row 2 each lack columns 4 and 5)
-- Pieces: 7 per player
-- Dice: 4 binary dice, result 0 to 4
-- Rosettes at: (0,0), (0,6), (1,3), (2,0), (2,6)
-- Rosettes grant extra turn and are safe from capture
-- Middle row (row 1) is shared between players
-- Rolling 0 forfeits the turn
-- Must land exactly on exit to bear off
-- First player to bear off all 7 pieces wins
+`ur-core` defines all game rules and is the authoritative source. `ur-cli` must not implement rule logic. It must not determine move legality, handle captures, or evaluate win conditions. All such decisions must be delegated to `ur-core`. Maintain strict separation: no game logic in `ur-cli`, no I/O in `ur-core`.
 
 ## Development Conventions
 
 ### Code Style
 
-- Run `cargo fmt` before every commit.
-- Run `cargo clippy --all-targets --all-features` and resolve all warnings.
-- Write doc comments (`///`) on all public types and functions in `ur-core`.
-- Keep functions short. If a function exceeds 40 lines, consider splitting it.
+- Execute `just fmt` before committing.
+- Execute `just check` and resolve all reported warnings.
+- Provide doc comments (`///`) for all public types and functions within `ur-core`.
+- Keep functions concise. If a function exceeds 40 lines, split it.
 
 ### Testing
 
-- Write tests before implementation (TDD).
-- Every rule edge case in SPEC.md must have a corresponding test.
-- Test names should describe the scenario: `test_capture_blocked_by_rosette`, not `test_move_3`.
-- Run `cargo test --workspace` to verify everything passes.
-- Include a randomized full-game simulation test that plays 1000 games to completion.
+- Follow test-driven development. Write tests before implementation.
+- Ensure every edge case described in `SPEC.md` is covered by a test.
+- Use descriptive test names, for example `test_capture_blocked_by_rosette`, not `test_move_3`.
+- Run `just test` to confirm all tests pass.
 
 ### Commits
 
-- Each commit should represent one logical change.
-- Commit messages follow conventional commits: `feat:`, `fix:`, `test:`, `refactor:`, `docs:`.
-- Do not commit code that fails `cargo test` or `cargo clippy`.
+- Each commit must represent a single logical change.
+- Use conventional commit prefixes: `feat:`, `fix:`, `test:`, `refactor:`, `docs:`.
+- Do not commit code that fails `just test` or `just check`.
 
 ### Dependencies
 
-- `ur-core` should have minimal dependencies. `rand` is acceptable for dice rolling. `serde` is acceptable behind a feature flag for serialization.
-- `ur-cli` depends on `ratatui`, `crossterm`, and `rand` for terminal rendering, input, and dice rolling.
-- Do not add dependencies without justification.
+- Keep `ur-core` dependencies minimal. `rand` is acceptable for dice logic. `serde` is acceptable when gated behind a feature flag.
+- `ur-cli` depends on `ratatui`, `crossterm`, and `rand`.
+- Introduce new dependencies only with clear justification.
 
-## Build and Run
+## Future Plans (Not for Implementation)
 
-```bash
-# Run tests
-cargo test --workspace
+- WebAssembly wrapper for browser usage
+- C FFI interface for non-Rust integrations
+- Additional rulesets such as Masters and Aseb
+- Online multiplayer support
+- Mobile clients
 
-# Run the terminal app
-cargo run -p ur-cli
+These items exist to justify the strict separation of I/O and game logic in `ur-core`.
 
-# Check formatting and lints
-cargo fmt --check
-cargo clippy --all-targets --all-features
-```
+## graphify — Required for Code Work
 
-## AI Opponent
+A complete knowledge graph of the codebase is available in `graphify-out/`. It captures modules, types, functions, specifications, design decisions, and their relationships.
 
-The AI uses expectiminimax search. This is minimax adapted for games with chance nodes (dice rolls). At each decision node, the AI evaluates all legal moves. At each chance node, it weights outcomes by dice probability.
+### Usage Before Writing Code
 
-The search depth acts as a difficulty setting. Depth 2 is casual, depth 4 is competent, depth 6 is strong. The board evaluation heuristic should consider: piece advancement along the path, number of scored pieces, number of captures available, rosette occupancy, and vulnerability to capture on the shared row.
+1. When introducing a function or type, run `/graphify query "where does X fit"` to identify the correct module and existing related elements. Avoid duplication.
+2. Before modifying a module, run `/graphify explain "ModuleName"` to understand dependencies, usage, and test coverage.
+3. When deciding placement, follow graph communities as the true module boundaries.
+4. For debugging, run `/graphify query "how does X connect to Y"` to trace relationships across modules.
 
-## Future Plans (Do Not Implement Yet)
+### Required Reading
 
-- Wasm wrapper for browser-based frontends
-- C FFI wrapper for non-Rust consumers
-- Additional rulesets (Masters, Aseb)
-- Online multiplayer
-- Mobile frontends
+Review `graphify-out/GRAPH_REPORT.md` before:
 
-These are mentioned only to explain why `ur-core` is designed with strict separation from I/O. The current scope is `ur-core` and `ur-cli` only.
+- Planning refactors
+- Investigating cross-module issues
+- Determining usage relationships between components
 
-## graphify — USE THIS WHEN BUILDING CODE
+### Maintaining Graph Accuracy
 
-A knowledge graph of this entire codebase lives in `graphify-out/`. It maps every module, type, function, spec, and design decision — and the relationships between them.
+- Code changes are tracked automatically via the git post-commit hook.
+- After modifying non-code assets such as documentation or specifications, run `/graphify . --update`.
+- If `graphify-out/.needs_update` is present, update the graph before continuing.
 
-### How to use it when writing code
+### Git Hook Installation
 
-**Before implementing anything, query the graph to understand what you're touching:**
-
-1. **Adding a function or type?** Run `/graphify query "where does X fit"` to find which community it belongs to, what it should depend on, and what already exists nearby. Don't duplicate something that's already there.
-2. **Changing a module?** Run `/graphify explain "ModuleName"` to see everything connected to it — callers, callees, types it shares, tests that cover it. Change with full awareness of impact.
-3. **Deciding where code goes?** The graph communities are the real module boundaries. `App State Machine` (community 0), `Game State & Rules` (community 1), `Animation System` (community 8), etc. Put new code where the graph says it connects, not where it seems like it "should" go.
-4. **Fixing a bug?** Run `/graphify query "how does X connect to Y"` to trace the path between the symptom and potential causes across module boundaries.
-
-**Read `graphify-out/GRAPH_REPORT.md` before:**
-- Planning a refactor or deciding where new code should go
-- Investigating a bug that might span modules
-- Answering "where is X used" or "what depends on Y"
-
-### Keeping the graph current
-
-- Code-only changes are picked up automatically by the git post-commit hook.
-- Run `/graphify . --update` after adding or changing non-code files (docs, specs, plans).
-- If `graphify-out/.needs_update` exists, run the update before proceeding.
-
-### Install the git hook (if missing)
+If the hook is not installed:
 
 ```bash
 graphify hook install
