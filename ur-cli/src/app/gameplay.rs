@@ -232,7 +232,7 @@ impl App {
             }
         }
         if self.animation.is_none() {
-            let path_squares = compute_move_path(rules, mv);
+            let path_squares = rules.move_path(mv);
             if path_squares.len() > 1 {
                 let is_player1 = mv.piece.player == Player::Player1;
                 self.animation = Some(Animation::PieceMove {
@@ -453,38 +453,6 @@ impl App {
         self.ai_thinking = false;
         self.apply_move(mv);
     }
-}
-
-/// Computes the sequence of board squares a piece travels through when making `mv`.
-///
-/// Returns the intermediate squares (not including the source) up to and including
-/// the destination. Used to populate `Animation::PieceMove::remaining`.
-pub(crate) fn compute_move_path(
-    rules: &ur_core::state::GameRules,
-    mv: &ur_core::state::Move,
-) -> Vec<ur_core::board::Square> {
-    let to_sq = match mv.to {
-        ur_core::state::PieceLocation::OnBoard(sq) => sq,
-        _ => return Vec::new(),
-    };
-
-    let path = rules.path_for(mv.piece.player);
-
-    let dest_idx = match path.index_of(to_sq) {
-        Some(i) => i,
-        None => return Vec::new(),
-    };
-
-    let start_idx = match mv.from {
-        ur_core::state::PieceLocation::OnBoard(from_sq) => match path.index_of(from_sq) {
-            Some(i) => i + 1,
-            None => return Vec::new(),
-        },
-        ur_core::state::PieceLocation::Unplayed => 0,
-        ur_core::state::PieceLocation::Scored => return Vec::new(),
-    };
-
-    (start_idx..=dest_idx).filter_map(|i| path.get(i)).collect()
 }
 
 #[cfg(test)]

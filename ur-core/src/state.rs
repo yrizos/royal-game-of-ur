@@ -112,6 +112,31 @@ impl GameRules {
             Player::Player2 => &self.path_player2,
         }
     }
+
+    /// Computes the sequence of board squares a piece travels through for `mv`.
+    ///
+    /// Returns intermediate squares (not the source) up to and including the
+    /// destination. Bear-off and scored moves return an empty `Vec`.
+    pub fn move_path(&self, mv: &Move) -> Vec<Square> {
+        let to_sq = match mv.to {
+            PieceLocation::OnBoard(sq) => sq,
+            _ => return Vec::new(),
+        };
+        let path = self.path_for(mv.piece.player);
+        let dest_idx = match path.index_of(to_sq) {
+            Some(i) => i,
+            None => return Vec::new(),
+        };
+        let start_idx = match mv.from {
+            PieceLocation::OnBoard(from_sq) => match path.index_of(from_sq) {
+                Some(i) => i + 1,
+                None => return Vec::new(),
+            },
+            PieceLocation::Unplayed => 0,
+            PieceLocation::Scored => return Vec::new(),
+        };
+        (start_idx..=dest_idx).filter_map(|i| path.get(i)).collect()
+    }
 }
 
 /// The board: tracks which piece occupies each square.
