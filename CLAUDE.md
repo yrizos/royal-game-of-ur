@@ -91,6 +91,32 @@ The search depth acts as a difficulty setting. Depth 2 is casual, depth 4 is com
 
 These are mentioned only to explain why `ur-core` is designed with strict separation from I/O. The current scope is `ur-core` and `ur-cli` only.
 
-## graphify
+## graphify — USE THIS WHEN BUILDING CODE
 
-A knowledge graph is at graphify-out/. Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md. Graph is auto-updated by git hooks on commit. Run `/graphify . --update` after editing docs or markdown files.
+A knowledge graph of this entire codebase lives in `graphify-out/`. It maps every module, type, function, spec, and design decision — and the relationships between them.
+
+### How to use it when writing code
+
+**Before implementing anything, query the graph to understand what you're touching:**
+
+1. **Adding a function or type?** Run `/graphify query "where does X fit"` to find which community it belongs to, what it should depend on, and what already exists nearby. Don't duplicate something that's already there.
+2. **Changing a module?** Run `/graphify explain "ModuleName"` to see everything connected to it — callers, callees, types it shares, tests that cover it. Change with full awareness of impact.
+3. **Deciding where code goes?** The graph communities are the real module boundaries. `App State Machine` (community 0), `Game State & Rules` (community 1), `Animation System` (community 8), etc. Put new code where the graph says it connects, not where it seems like it "should" go.
+4. **Fixing a bug?** Run `/graphify query "how does X connect to Y"` to trace the path between the symptom and potential causes across module boundaries.
+
+**Read `graphify-out/GRAPH_REPORT.md` before:**
+- Planning a refactor or deciding where new code should go
+- Investigating a bug that might span modules
+- Answering "where is X used" or "what depends on Y"
+
+### Keeping the graph current
+
+- Code-only changes are picked up automatically by the git post-commit hook.
+- Run `/graphify . --update` after adding or changing non-code files (docs, specs, plans).
+- If `graphify-out/.needs_update` exists, run the update before proceeding.
+
+### Install the git hook (if missing)
+
+```bash
+graphify hook install
+```
