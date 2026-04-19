@@ -300,9 +300,11 @@ impl App {
         self.should_quit = true;
     }
 
-    /// Opens the pause menu (called when Esc is pressed during gameplay).
+    /// Opens the pause menu (only when a game is active).
     pub fn open_pause(&mut self) {
-        self.screen = Screen::PauseMenu { selected: 0 };
+        if self.game_state.is_some() {
+            self.screen = Screen::PauseMenu { selected: 0 };
+        }
     }
 
     pub fn handle_confirm(&mut self) {
@@ -349,6 +351,9 @@ impl App {
     pub fn handle_back(&mut self) {
         match &self.screen {
             Screen::DifficultySelect { .. } => self.screen = Screen::Title,
+            Screen::DiceOff { .. } => {
+                self.screen = Screen::DifficultySelect { selected: 0 };
+            }
             Screen::PauseMenu { .. } => self.screen = Screen::Game,
             Screen::Help { from_game } => {
                 if *from_game {

@@ -46,7 +46,7 @@ pub fn map_key(key: KeyEvent, screen: &Screen) -> Option<Action> {
         },
         Screen::DiceOff { .. } => match key.code {
             KeyCode::Enter | KeyCode::Char(' ') => Some(Action::Confirm),
-            KeyCode::Esc => Some(Action::QuitPrompt),
+            KeyCode::Esc => Some(Action::Back),
             _ => None,
         },
         Screen::Game => match key.code {
