@@ -2,9 +2,11 @@ use ratatui::{
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph},
+    widgets::{Clear, List, ListItem, Paragraph},
     Frame,
 };
+
+use crate::ui::styled_box::StyledBox;
 
 const MENU_ITEMS: [&str; 3] = ["Resume", "How to Play", "Quit"];
 
@@ -14,15 +16,12 @@ pub fn render_pause_menu(f: &mut Frame, selected: usize) {
     let popup = centered_rect(32, 7, area);
     f.render_widget(Clear, popup);
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow))
-        .title(Span::styled(
-            " \u{23f8}  Paused ",
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        ));
+    let sb = StyledBox {
+        title: "\u{23f8}  Paused",
+        border_color: Color::Yellow,
+        scrollable: false,
+    };
+    let content = sb.render(f, popup);
 
     let items: Vec<ListItem> = MENU_ITEMS
         .iter()
@@ -41,9 +40,7 @@ pub fn render_pause_menu(f: &mut Frame, selected: usize) {
         })
         .collect();
 
-    let inner = block.inner(popup);
-    f.render_widget(block, popup);
-    f.render_widget(List::new(items), inner);
+    f.render_widget(List::new(items), content);
 }
 
 // ── Help screen ──────────────────────────────────────────────────────────────
