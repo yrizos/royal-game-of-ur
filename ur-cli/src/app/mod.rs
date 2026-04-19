@@ -22,7 +22,6 @@ pub struct LogEntry {
 
 /// Which screen is currently active.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub enum Screen {
     Title,
     DifficultySelect {
@@ -48,7 +47,6 @@ pub enum Screen {
 
 /// State for the first-player dice-off animation.
 #[derive(Debug)]
-#[allow(dead_code)]
 pub struct DiceOffState {
     pub p1_frames: u32,
     pub p2_frames: u32,
@@ -79,7 +77,6 @@ pub const CURSOR_BEAR_OFF: usize = 15;
 
 /// Game statistics accumulated during play.
 #[derive(Debug, Default)]
-#[allow(dead_code)]
 pub struct GameStats {
     pub moves: u32,
     pub start_time: Option<Instant>,
@@ -88,7 +85,6 @@ pub struct GameStats {
 }
 
 /// Top-level application state.
-#[allow(dead_code)]
 pub struct App {
     pub screen: Screen,
     pub should_quit: bool,

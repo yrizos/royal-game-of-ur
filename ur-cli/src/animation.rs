@@ -11,7 +11,6 @@ pub enum Animation {
         display: Dice,
     },
     /// Piece moving square by square along a path.
-    #[allow(dead_code)]
     PieceMove {
         remaining: Vec<Square>,
         frames_per_step: u32,
@@ -19,15 +18,10 @@ pub enum Animation {
         is_player1: bool,
     },
     /// Captured piece flashing before disappearing.
-    #[allow(dead_code)]
     CaptureFlash {
-        #[allow(dead_code)]
         square: Square,
         frames_remaining: u32,
     },
-    /// AI is computing — spinner frame.
-    #[allow(dead_code)]
-    AiThinking { frame: u32 },
     /// Animation finished — caller should clear this.
     Done,
 }
@@ -73,9 +67,6 @@ pub fn tick_animation(anim: &mut Animation) {
             } else {
                 *frames_remaining -= 1;
             }
-        }
-        Animation::AiThinking { frame } => {
-            *frame = (*frame + 1) % 4;
         }
         Animation::Done => {}
     }
@@ -261,20 +252,6 @@ mod tests {
             }
             _ => panic!("wrong variant"),
         }
-    }
-
-    #[test]
-    fn test_ai_thinking_increments_frame() {
-        let mut anim = Animation::AiThinking { frame: 2 };
-        tick_animation(&mut anim);
-        assert!(matches!(anim, Animation::AiThinking { frame: 3 }));
-    }
-
-    #[test]
-    fn test_ai_thinking_frame_wraps_at_4() {
-        let mut anim = Animation::AiThinking { frame: 3 };
-        tick_animation(&mut anim);
-        assert!(matches!(anim, Animation::AiThinking { frame: 0 }));
     }
 
     #[test]

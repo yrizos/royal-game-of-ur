@@ -936,4 +936,92 @@ mod tests {
         };
         state.apply_move(illegal);
     }
+
+    /// Helper: creates a Finkel ruleset with modified rosette flags.
+    fn finkel_with(extra_turn: bool, safe: bool) -> GameRules {
+        let mut rules = GameRules::finkel();
+        rules.rosettes_grant_extra_turn = extra_turn;
+        rules.rosettes_are_safe = safe;
+        rules
+    }
+
+    #[test]
+    fn test_rosettes_grant_extra_turn_false_switches_player() {
+        let rules = finkel_with(false, true);
+        let mut s = GameState::new(&rules);
+        let path = rules.path_for(Player::Player1);
+        // Place a piece 4 steps before the rosette at path[3] (step 4✦).
+        // path[3] is the rosette for Player 1.
+        assert!(
+            rules.board_shape.is_rosette(path.get(3).unwrap()),
+            "path[3] should be a rosette"
+        );
+        s.board
+            .set(path.get(0).unwrap(), Some(Piece::new(Player::Player1, 0)));
+        s.unplayed[Player::Player1.index()] = 6;
+        let moves = s.legal_moves(Dice::new(3).unwrap());
+        let mv = moves
+            .iter()
+            .find(|m| m.to == PieceLocation::OnBoard(path.get(3).unwrap()))
+            .expect("should be able to move to rosette");
+        let result = s.apply_move(mv.clone());
+        assert!(result.landed_on_rosette);
+        assert_eq!(
+            result.new_state.current_player,
+            Player::Player2,
+            "with rosettes_grant_extra_turn=false, turn should switch"
+        );
+    }
+
+    #[test]
+    fn test_rosettes_are_safe_false_allows_capture_on_rosette() {
+        let rules = finkel_with(true, false);
+        let mut s = GameState::new(&rules);
+        let p1_path = rules.path_for(Player::Player1);
+        let rosette = p1_path.get(7).unwrap();
+        assert!(rules.board_shape.is_rosette(rosette));
+        // Place opponent piece on the rosette.
+        s.board.set(rosette, Some(Piece::new(Player::Player2, 0)));
+        s.unplayed[Player::Player2.index()] = 6;
+        // Place P1 piece 1 step before the rosette.
+        s.board.set(
+            p1_path.get(6).unwrap(),
+            Some(Piece::new(Player::Player1, 0)),
+        );
+        s.unplayed[Player::Player1.index()] = 6;
+        let moves = s.legal_moves(Dice::new(1).unwrap());
+        let capture_mv = moves
+            .iter()
+            .find(|m| m.to == PieceLocation::OnBoard(rosette));
+        assert!(
+            capture_mv.is_some(),
+            "with rosettes_are_safe=false, capturing on a rosette should be a legal move"
+        );
+        let result = s.apply_move(capture_mv.unwrap().clone());
+        assert!(result.captured.is_some());
+    }
+
+    #[test]
+    fn test_rosettes_are_safe_true_blocks_capture_on_rosette() {
+        let rules = finkel_with(true, true);
+        let mut s = GameState::new(&rules);
+        let p1_path = rules.path_for(Player::Player1);
+        let rosette = p1_path.get(7).unwrap();
+        assert!(rules.board_shape.is_rosette(rosette));
+        s.board.set(rosette, Some(Piece::new(Player::Player2, 0)));
+        s.unplayed[Player::Player2.index()] = 6;
+        s.board.set(
+            p1_path.get(6).unwrap(),
+            Some(Piece::new(Player::Player1, 0)),
+        );
+        s.unplayed[Player::Player1.index()] = 6;
+        let moves = s.legal_moves(Dice::new(1).unwrap());
+        let capture_mv = moves
+            .iter()
+            .find(|m| m.to == PieceLocation::OnBoard(rosette));
+        assert!(
+            capture_mv.is_none(),
+            "with rosettes_are_safe=true, landing on an opponent's rosette should be blocked"
+        );
+    }
 }

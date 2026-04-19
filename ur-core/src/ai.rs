@@ -246,6 +246,43 @@ mod tests {
     }
 
     #[test]
+    fn test_ai_depth_3_returns_valid_move_and_does_not_panic() {
+        let rules = GameRules::finkel();
+        let state = GameState::new(&rules);
+        let roll = Dice::new(2).unwrap();
+        let moves = state.legal_moves(roll);
+        assert!(!moves.is_empty());
+        let chosen = choose_move(&state, roll, 3);
+        assert!(
+            moves.contains(&chosen),
+            "depth-3 search returned a move not in legal_moves"
+        );
+    }
+
+    #[test]
+    fn test_ai_depth_4_midgame_does_not_panic() {
+        let rules = GameRules::finkel();
+        let mut s = GameState::new(&rules);
+        let path = rules.path_for(Player::Player1);
+        s.board
+            .set(path.get(3).unwrap(), Some(Piece::new(Player::Player1, 0)));
+        s.board
+            .set(path.get(7).unwrap(), Some(Piece::new(Player::Player1, 1)));
+        s.unplayed[Player::Player1.index()] = 5;
+        let p2_path = rules.path_for(Player::Player2);
+        s.board.set(
+            p2_path.get(5).unwrap(),
+            Some(Piece::new(Player::Player2, 0)),
+        );
+        s.unplayed[Player::Player2.index()] = 6;
+        let roll = Dice::new(2).unwrap();
+        let moves = s.legal_moves(roll);
+        assert!(!moves.is_empty());
+        let chosen = choose_move(&s, roll, 4);
+        assert!(moves.contains(&chosen));
+    }
+
+    #[test]
     fn test_evaluate_favours_more_scored_pieces() {
         let rules = GameRules::finkel();
         // Build two states from Player1's perspective: more scored = higher score.
