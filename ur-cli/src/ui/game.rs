@@ -225,6 +225,66 @@ pub struct BoardWidget<'a> {
     pub cell_h: u16,
 }
 
+/// Resolve the display character, foreground, and background for a single board cell.
+fn resolve_cell(
+    occupant: Option<ur_core::player::Piece>,
+    is_rosette: bool,
+    is_selected: bool,
+    is_target: bool,
+    capture_flash: bool,
+    ghost: Option<bool>, // Some(is_p1) if this square has a move-animation ghost
+) -> (char, Color, Color) {
+    if capture_flash {
+        return ('\u{25cf}', Color::LightRed, Color::Reset);
+    }
+    if let Some(is_p1) = ghost {
+        let gc = if is_p1 { COLOR_P1 } else { COLOR_P2 };
+        let gb = if is_rosette {
+            COLOR_ROSETTE_BG
+        } else {
+            Color::Reset
+        };
+        return ('\u{25cf}', gc, gb);
+    }
+
+    let highlight_bg = if is_selected {
+        Some(COLOR_SELECTED_BG)
+    } else if is_target {
+        Some(COLOR_TARGET_BG)
+    } else {
+        None
+    };
+
+    if let Some(bg) = highlight_bg {
+        if let Some(piece) = occupant {
+            let pc = match piece.player {
+                Player::Player1 => COLOR_P1,
+                Player::Player2 => COLOR_P2,
+            };
+            ('\u{25cf}', pc, bg)
+        } else if is_rosette {
+            ('\u{2726}', COLOR_ROSETTE_FG, bg)
+        } else {
+            (' ', Color::Reset, bg)
+        }
+    } else if let Some(piece) = occupant {
+        let pc = match piece.player {
+            Player::Player1 => COLOR_P1,
+            Player::Player2 => COLOR_P2,
+        };
+        let bg = if is_rosette {
+            COLOR_ROSETTE_BG
+        } else {
+            Color::Reset
+        };
+        ('\u{25cf}', pc, bg)
+    } else if is_rosette {
+        ('\u{2726}', COLOR_ROSETTE_FG, COLOR_ROSETTE_BG)
+    } else {
+        (' ', Color::Reset, Color::Reset)
+    }
+}
+
 impl<'a> Widget for BoardWidget<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let cw = self.cell_w;
@@ -298,56 +358,19 @@ impl<'a> Widget for BoardWidget<'a> {
             let is_rosette = self.rules.board_shape.is_rosette(sq);
             let occupant = self.board.get(sq);
 
-            let (sym, fg, bg) = if capture_flash_sq == Some(sq) {
-                ('\u{25cf}', Color::LightRed, Color::Reset)
-            } else if piece_move_ghost == Some(sq) {
-                let gc = if ghost_is_p1 { COLOR_P1 } else { COLOR_P2 };
-                let gb = if is_rosette {
-                    COLOR_ROSETTE_BG
-                } else {
-                    Color::Reset
-                };
-                ('\u{25cf}', gc, gb)
-            } else if is_selected {
-                if let Some(piece) = occupant {
-                    let pc = match piece.player {
-                        Player::Player1 => COLOR_P1,
-                        Player::Player2 => COLOR_P2,
-                    };
-                    ('\u{25cf}', pc, COLOR_SELECTED_BG)
-                } else if is_rosette {
-                    ('\u{2726}', COLOR_ROSETTE_FG, COLOR_SELECTED_BG)
-                } else {
-                    (' ', Color::Reset, COLOR_SELECTED_BG)
-                }
-            } else if is_target {
-                if let Some(piece) = occupant {
-                    let pc = match piece.player {
-                        Player::Player1 => COLOR_P1,
-                        Player::Player2 => COLOR_P2,
-                    };
-                    ('\u{25cf}', pc, COLOR_TARGET_BG)
-                } else if is_rosette {
-                    ('\u{2726}', COLOR_ROSETTE_FG, COLOR_TARGET_BG)
-                } else {
-                    (' ', Color::Reset, COLOR_TARGET_BG)
-                }
-            } else if let Some(piece) = occupant {
-                let pc = match piece.player {
-                    Player::Player1 => COLOR_P1,
-                    Player::Player2 => COLOR_P2,
-                };
-                let bg = if is_rosette {
-                    COLOR_ROSETTE_BG
-                } else {
-                    Color::Reset
-                };
-                ('\u{25cf}', pc, bg)
-            } else if is_rosette {
-                ('\u{2726}', COLOR_ROSETTE_FG, COLOR_ROSETTE_BG)
+            let ghost = if piece_move_ghost == Some(sq) {
+                Some(ghost_is_p1)
             } else {
-                (' ', Color::Reset, Color::Reset)
+                None
             };
+            let (sym, fg, bg) = resolve_cell(
+                occupant,
+                is_rosette,
+                is_selected,
+                is_target,
+                capture_flash_sq == Some(sq),
+                ghost,
+            );
 
             if bg != Color::Reset {
                 let cell_bg = Style::default().bg(bg);
