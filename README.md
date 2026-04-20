@@ -1,8 +1,8 @@
 # The Royal Game of Ur
 
-One of the oldest known board games, dating to about 2600 BCE in ancient Mesopotamia. Sets were excavated from the Royal Tombs of Ur (modern-day Iraq) by Sir Leonard Woolley in the 1920s.
+A terminal implementation of one of the oldest known board games, dating to about 2600 BCE in ancient Mesopotamia.
 
-These rules follow Irving Finkel's reconstruction at the British Museum, based on a cuneiform tablet from around 177 BCE.
+Game sets were excavated from the Royal Tombs of Ur (modern-day Iraq) by Sir Leonard Woolley in the 1920s, and the rules were reconstructed by Irving Finkel at the British Museum from a cuneiform tablet written around 177 BCE.
 
 Play against an AI opponent in your terminal.
 
@@ -74,16 +74,22 @@ Steps 1-4 are your private lane (left column). Steps 5-12 are the bridge (both p
 .
 ├── ur-cli/                    # ratatui terminal frontend
 │   └── src/
+│       ├── app/
+│       │   ├── mod.rs         # app state, screens, constants
+│       │   ├── gameplay.rs    # game flow, dice rolls, AI turns
+│       │   ├── handlers.rs    # screen transitions, menu actions
+│       │   └── navigation.rs  # 2D cursor grid for board navigation
 │       ├── ui/
+│       │   ├── mod.rs         # top-level render dispatch
 │       │   ├── game.rs        # board widget, player panels, dice, status bar
 │       │   ├── gameover.rs    # game over screen
+│       │   ├── help.rs        # scrollable help/rules overlay
 │       │   ├── menu.rs        # difficulty select
-│       │   ├── mod.rs         # top-level render dispatch
-│       │   ├── pause.rs       # pause menu + scrollable help/rules overlay
+│       │   ├── pause.rs       # pause menu
 │       │   ├── styled_box.rs  # reusable bordered box widget
+│       │   ├── theme.rs       # colours and timing constants
 │       │   └── title.rs       # title screen
 │       ├── animation.rs       # dice roll, piece movement, capture flash
-│       ├── app.rs             # app state, screens, game flow, 2D cursor
 │       ├── input.rs           # key mapping per screen
 │       └── main.rs            # entry point, terminal setup, event loop
 ├── ur-core/                   # pure game logic library, no I/O
@@ -95,7 +101,7 @@ Steps 1-4 are your private lane (left column). Steps 5-12 are the bridge (both p
 │   │   ├── player.rs          # player enum
 │   │   └── state.rs           # game state, legal moves, move application
 │   └── tests/
-│       └── simulation.rs      # 1000-game randomized simulation
+│       └── simulation.rs      # randomized simulation (1000 games × 2 seeds)
 ├── docs/superpowers/
 │   ├── specs/                 # design specs (write before implementing)
 │   └── plans/                 # implementation plans (write before coding)
