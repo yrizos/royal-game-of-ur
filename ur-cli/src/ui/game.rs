@@ -628,31 +628,7 @@ pub fn render_player_panel(
     f.render_widget(Paragraph::new(Line::from(prompt)), sections[3]);
     // [4] blank margin — separates dice area from turn log
 
-    // [5] Turn log — most recent turn at top (white), older turns below (dark gray)
-    {
-        use ratatui::widgets::{List, ListItem};
-        let mut all_lines: Vec<(String, Color)> = Vec::new();
-        for (i, turn) in turn_log.iter().rev().enumerate() {
-            let c = if i == 0 {
-                Color::White
-            } else {
-                Color::DarkGray
-            };
-            if i > 0 {
-                all_lines.push((String::new(), Color::DarkGray));
-            }
-            for line in turn {
-                all_lines.push((line.clone(), c));
-            }
-        }
-        let available = sections[5].height as usize;
-        let items: Vec<ListItem> = all_lines
-            .into_iter()
-            .take(available)
-            .map(|(text, c)| ListItem::new(Span::styled(text, Style::default().fg(c))))
-            .collect();
-        f.render_widget(List::new(items), sections[5]);
-    }
+    render_turn_log(f, sections[5], turn_log);
 
     // [6] Scored dots
     let scored_str = if scored == 0 {
@@ -684,6 +660,31 @@ pub fn render_player_panel(
         Paragraph::new(format!("Captures: {}", captures)).style(Style::default().fg(Color::Gray)),
         sections[8],
     );
+}
+
+fn render_turn_log(f: &mut Frame, area: Rect, turn_log: &[Vec<String>]) {
+    use ratatui::widgets::{List, ListItem};
+    let mut all_lines: Vec<(String, Color)> = Vec::new();
+    for (i, turn) in turn_log.iter().rev().enumerate() {
+        let c = if i == 0 {
+            Color::White
+        } else {
+            Color::DarkGray
+        };
+        if i > 0 {
+            all_lines.push((String::new(), Color::DarkGray));
+        }
+        for line in turn {
+            all_lines.push((line.clone(), c));
+        }
+    }
+    let available = area.height as usize;
+    let items: Vec<ListItem> = all_lines
+        .into_iter()
+        .take(available)
+        .map(|(text, c)| ListItem::new(Span::styled(text, Style::default().fg(c))))
+        .collect();
+    f.render_widget(List::new(items), area);
 }
 
 /// Computes what the dice widget should display for `player`'s panel.
