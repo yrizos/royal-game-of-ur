@@ -88,12 +88,19 @@ impl BoardShape {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Path {
     squares: Vec<Square>,
+    /// Reverse lookup: `reverse[row * 8 + col]` yields the path index for that square.
+    #[doc(hidden)]
+    reverse: [Option<u8>; 24],
 }
 
 impl Path {
     /// Creates a path from an ordered list of squares.
     pub fn new(squares: Vec<Square>) -> Self {
-        Self { squares }
+        let mut reverse = [None; 24];
+        for (i, sq) in squares.iter().enumerate() {
+            reverse[sq.row as usize * 8 + sq.col as usize] = Some(i as u8);
+        }
+        Self { squares, reverse }
     }
 
     /// Returns all squares in this path in order.
@@ -140,7 +147,7 @@ impl Path {
     /// assert_eq!(path.index_of(Square::new(0, 0)), None);
     /// ```
     pub fn index_of(&self, sq: Square) -> Option<usize> {
-        self.squares.iter().position(|&s| s == sq)
+        self.reverse[sq.row as usize * 8 + sq.col as usize].map(|i| i as usize)
     }
 }
 
