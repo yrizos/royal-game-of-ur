@@ -84,6 +84,16 @@ pub struct GameStats {
     pub captures: [u32; 2],
 }
 
+impl GameStats {
+    pub fn elapsed(&self) -> std::time::Duration {
+        match (self.start_time, self.end_time) {
+            (Some(start), Some(end)) => end.duration_since(start),
+            (Some(start), None) => start.elapsed(),
+            _ => std::time::Duration::ZERO,
+        }
+    }
+}
+
 /// Top-level application state.
 pub struct App {
     pub screen: Screen,

@@ -40,11 +40,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
                 ),
                 None => false,
             };
-            let elapsed = match (app.stats.start_time, app.stats.end_time) {
-                (Some(start), Some(end)) => end.duration_since(start),
-                (Some(start), None) => start.elapsed(),
-                _ => std::time::Duration::ZERO,
-            };
+            let elapsed = app.stats.elapsed();
             render(
                 f,
                 &GameOverData {
