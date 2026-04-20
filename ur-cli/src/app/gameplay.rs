@@ -144,6 +144,16 @@ impl App {
         self.transition_turn(&result);
     }
 
+    fn emit_event(&mut self, player: Player, player_idx: usize, text: String) {
+        self.log.push(LogEntry {
+            player: Some(player),
+            text: text.clone(),
+        });
+        if let Some(cur) = self.turn_log[player_idx].last_mut() {
+            cur.push(text);
+        }
+    }
+
     /// Builds log entries for a move and returns the panel event string.
     fn build_move_log(
         &mut self,
@@ -151,7 +161,7 @@ impl App {
         result: &ur_core::state::MoveResult,
         current_player: Player,
     ) -> Option<String> {
-        let player_idx = mv.piece.player.index();
+        let idx = mv.piece.player.index();
         match &mv.to {
             ur_core::state::PieceLocation::OnBoard(sq) => {
                 let step = result
@@ -163,53 +173,23 @@ impl App {
                     .position(|&s| s == *sq)
                     .map(|i| i + 1)
                     .unwrap_or(0);
-                if result.captured.is_some() {
-                    self.stats.captures[player_idx] += 1;
-                    let t = format!("Captured piece at {}!", step);
-                    self.log.push(LogEntry {
-                        player: Some(current_player),
-                        text: t.clone(),
-                    });
-                    if let Some(cur) = self.turn_log[player_idx].last_mut() {
-                        cur.push(t.clone());
-                    }
-                    Some(t)
+                let t = if result.captured.is_some() {
+                    self.stats.captures[idx] += 1;
+                    format!("Captured piece at {}!", step)
                 } else if result.landed_on_rosette {
-                    let t = format!("Moved to rosette at {}", step);
-                    self.log.push(LogEntry {
-                        player: Some(current_player),
-                        text: t.clone(),
-                    });
-                    self.log.push(LogEntry {
-                        player: Some(current_player),
-                        text: "Extra turn!".to_string(),
-                    });
-                    if let Some(cur) = self.turn_log[player_idx].last_mut() {
-                        cur.push(t.clone());
-                        cur.push("Extra turn!".to_string());
-                    }
-                    Some(t)
+                    format!("Moved to rosette at {}", step)
                 } else {
-                    let t = format!("Moved to {}", step);
-                    self.log.push(LogEntry {
-                        player: Some(current_player),
-                        text: t.clone(),
-                    });
-                    if let Some(cur) = self.turn_log[player_idx].last_mut() {
-                        cur.push(t.clone());
-                    }
-                    Some(t)
+                    format!("Moved to {}", step)
+                };
+                self.emit_event(current_player, idx, t.clone());
+                if result.landed_on_rosette {
+                    self.emit_event(current_player, idx, "Extra turn!".to_string());
                 }
+                Some(t)
             }
             ur_core::state::PieceLocation::Scored => {
                 let t = "Scored!".to_string();
-                self.log.push(LogEntry {
-                    player: Some(current_player),
-                    text: t.clone(),
-                });
-                if let Some(cur) = self.turn_log[player_idx].last_mut() {
-                    cur.push(t.clone());
-                }
+                self.emit_event(current_player, idx, t.clone());
                 Some(t)
             }
             _ => None,
