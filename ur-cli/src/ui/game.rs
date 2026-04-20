@@ -429,88 +429,112 @@ impl<'a> Widget for BoardWidget<'a> {
             }
         }
 
-        // ── Unplayed / scored indicators in the H-gap ───────────────────
-        // P1 = row 2 → screen col 0, P2 = row 0 → screen col 2.
-        // Col 4 (below entry) = unplayed, Col 5 (above exit) = scored.
-        let colors = [COLOR_P1, COLOR_P2];
-        let screen_cols: [u16; 2] = [0, 2];
-        for pi in 0..2usize {
-            let sc = screen_cols[pi];
-            let pc = colors[pi];
-            let cx = bx + sc * (cw + 1) + 1;
+        draw_h_gap_indicators(
+            buf,
+            bx,
+            by,
+            cw,
+            ch,
+            &self.unplayed,
+            &self.scored,
+            self.pool_selected,
+            self.bear_off_selected,
+            self.target_will_score,
+        );
+    }
+}
 
-            // Unplayed (gap col 4, flipped to visual row 3)
-            let count = self.unplayed[pi];
-            let is_pool_hl = pi == 0 && self.pool_selected;
-            if count > 0 || is_pool_hl {
-                let gy = by + 3 * (ch + 1) + 1;
-                let mid_x = cx + (cw - 1) / 2;
-                let mid_y = gy + (ch.saturating_sub(1)) / 2;
-                let bg = if is_pool_hl {
-                    COLOR_SELECTED_BG
-                } else {
-                    Color::Reset
-                };
-                if is_pool_hl {
-                    let cell_bg = Style::default().bg(bg);
-                    for dy in 0..ch {
-                        for dx in 0..cw {
-                            buf.get_mut(cx + dx, gy + dy)
-                                .set_char(' ')
-                                .set_style(cell_bg);
-                        }
-                    }
-                }
-                if count > 0 {
-                    let sx = if cw >= 5 { mid_x - 1 } else { mid_x };
-                    buf.get_mut(sx, mid_y)
-                        .set_char('\u{25cf}')
-                        .set_style(Style::default().fg(pc).bg(bg));
-                    if cw >= 5 {
-                        let digit = char::from(b'0' + count);
-                        buf.get_mut(sx + 2, mid_y)
-                            .set_char(digit)
-                            .set_style(Style::default().fg(pc).bg(bg).add_modifier(Modifier::DIM));
+#[allow(clippy::too_many_arguments)]
+fn draw_h_gap_indicators(
+    buf: &mut Buffer,
+    bx: u16,
+    by: u16,
+    cw: u16,
+    ch: u16,
+    unplayed: &[u8; 2],
+    scored: &[u8; 2],
+    pool_selected: bool,
+    bear_off_selected: bool,
+    target_will_score: bool,
+) {
+    let colors = [COLOR_P1, COLOR_P2];
+    let screen_cols: [u16; 2] = [0, 2];
+    for pi in 0..2usize {
+        let sc = screen_cols[pi];
+        let pc = colors[pi];
+        let cx = bx + sc * (cw + 1) + 1;
+
+        // Unplayed (gap col 4, flipped to visual row 3)
+        let count = unplayed[pi];
+        let is_pool_hl = pi == 0 && pool_selected;
+        if count > 0 || is_pool_hl {
+            let gy = by + 3 * (ch + 1) + 1;
+            let mid_x = cx + (cw - 1) / 2;
+            let mid_y = gy + (ch.saturating_sub(1)) / 2;
+            let bg = if is_pool_hl {
+                COLOR_SELECTED_BG
+            } else {
+                Color::Reset
+            };
+            if is_pool_hl {
+                let cell_bg = Style::default().bg(bg);
+                for dy in 0..ch {
+                    for dx in 0..cw {
+                        buf.get_mut(cx + dx, gy + dy)
+                            .set_char(' ')
+                            .set_style(cell_bg);
                     }
                 }
             }
+            if count > 0 {
+                let sx = if cw >= 5 { mid_x - 1 } else { mid_x };
+                buf.get_mut(sx, mid_y)
+                    .set_char('\u{25cf}')
+                    .set_style(Style::default().fg(pc).bg(bg));
+                if cw >= 5 {
+                    let digit = char::from(b'0' + count);
+                    buf.get_mut(sx + 2, mid_y)
+                        .set_char(digit)
+                        .set_style(Style::default().fg(pc).bg(bg).add_modifier(Modifier::DIM));
+                }
+            }
+        }
 
-            // Scored (gap col 5, flipped to visual row 2)
-            let scored = self.scored[pi];
-            let is_score_target = pi == 0 && self.target_will_score;
-            let is_bear_off_cursor = pi == 0 && self.bear_off_selected;
-            if scored > 0 || is_score_target || is_bear_off_cursor {
-                let gy = by + 2 * (ch + 1) + 1;
-                let mid_x = cx + (cw - 1) / 2;
-                let mid_y = gy + (ch.saturating_sub(1)) / 2;
-                let bg = if is_score_target {
-                    COLOR_TARGET_BG
-                } else if is_bear_off_cursor {
-                    COLOR_SELECTED_BG
-                } else {
-                    Color::Reset
-                };
-                if is_score_target || is_bear_off_cursor {
-                    let cell_bg = Style::default().bg(bg);
-                    for dy in 0..ch {
-                        for dx in 0..cw {
-                            buf.get_mut(cx + dx, gy + dy)
-                                .set_char(' ')
-                                .set_style(cell_bg);
-                        }
+        // Scored (gap col 5, flipped to visual row 2)
+        let scored_count = scored[pi];
+        let is_score_target = pi == 0 && target_will_score;
+        let is_bear_off_cursor = pi == 0 && bear_off_selected;
+        if scored_count > 0 || is_score_target || is_bear_off_cursor {
+            let gy = by + 2 * (ch + 1) + 1;
+            let mid_x = cx + (cw - 1) / 2;
+            let mid_y = gy + (ch.saturating_sub(1)) / 2;
+            let bg = if is_score_target {
+                COLOR_TARGET_BG
+            } else if is_bear_off_cursor {
+                COLOR_SELECTED_BG
+            } else {
+                Color::Reset
+            };
+            if is_score_target || is_bear_off_cursor {
+                let cell_bg = Style::default().bg(bg);
+                for dy in 0..ch {
+                    for dx in 0..cw {
+                        buf.get_mut(cx + dx, gy + dy)
+                            .set_char(' ')
+                            .set_style(cell_bg);
                     }
                 }
-                let sx = if cw >= 5 { mid_x - 1 } else { mid_x };
-                if scored > 0 {
-                    buf.get_mut(sx, mid_y)
-                        .set_char('\u{25cf}')
-                        .set_style(Style::default().fg(pc).bg(bg).add_modifier(Modifier::BOLD));
-                    if cw >= 5 {
-                        let digit = char::from(b'0' + scored);
-                        buf.get_mut(sx + 2, mid_y)
-                            .set_char(digit)
-                            .set_style(Style::default().fg(pc).bg(bg));
-                    }
+            }
+            let sx = if cw >= 5 { mid_x - 1 } else { mid_x };
+            if scored_count > 0 {
+                buf.get_mut(sx, mid_y)
+                    .set_char('\u{25cf}')
+                    .set_style(Style::default().fg(pc).bg(bg).add_modifier(Modifier::BOLD));
+                if cw >= 5 {
+                    let digit = char::from(b'0' + scored_count);
+                    buf.get_mut(sx + 2, mid_y)
+                        .set_char(digit)
+                        .set_style(Style::default().fg(pc).bg(bg));
                 }
             }
         }
