@@ -767,6 +767,66 @@ pub fn render_status_bar(
 
 // ── Gameplay screen ──────────────────────────────────────────────────────────
 
+struct CursorHighlights {
+    selected_square: Option<Square>,
+    target_square: Option<Square>,
+    pool_selected: bool,
+    bear_off_selected: bool,
+    target_will_score: bool,
+}
+
+fn cursor_highlights(app: &App, game_state: &ur_core::state::GameState) -> CursorHighlights {
+    let path = game_state.rules.path_for(game_state.current_player);
+    let pool_selected = app.cursor_path_pos == 0;
+    let bear_off_selected = app.cursor_path_pos == crate::app::CURSOR_BEAR_OFF;
+    let selected_square = if app.cursor_path_pos == 0 {
+        None
+    } else {
+        path.get(app.cursor_path_pos - 1)
+    };
+    let cursor_move = app.legal_move_at_cursor();
+    let target_square = cursor_move.and_then(|mv| match mv.to {
+        PieceLocation::OnBoard(sq) => Some(sq),
+        _ => None,
+    });
+    let target_will_score = cursor_move
+        .map(|mv| matches!(mv.to, PieceLocation::Scored))
+        .unwrap_or(false);
+    CursorHighlights {
+        selected_square,
+        target_square,
+        pool_selected,
+        bear_off_selected,
+        target_will_score,
+    }
+}
+
+fn render_column_headers(buf: &mut Buffer, col_area: Rect, board_w: u16, cw: u16) {
+    let header_y = col_area.y + 1;
+    if header_y >= col_area.y + col_area.height {
+        return;
+    }
+    let bx_center = col_area.x + (col_area.width.saturating_sub(board_w)) / 2;
+    let headers: [(&str, Color); 3] = [
+        ("YOU", COLOR_P1),
+        ("\u{25c6}", Color::DarkGray),
+        ("AI", COLOR_P2),
+    ];
+    for (i, (label, fg)) in headers.iter().enumerate() {
+        let col_x = bx_center + i as u16 * (cw + 1) + 1;
+        let label_w: u16 = label.chars().count() as u16;
+        let pad = cw.saturating_sub(label_w) / 2;
+        for (j, c) in label.chars().enumerate() {
+            let x = col_x + pad + j as u16;
+            if x < col_area.x + col_area.width {
+                buf.get_mut(x, header_y)
+                    .set_char(c)
+                    .set_style(Style::default().fg(*fg).add_modifier(Modifier::BOLD));
+            }
+        }
+    }
+}
+
 /// Assembles the full gameplay screen: player panels, board, and status bar.
 pub fn render_game(f: &mut Frame, app: &App) {
     let area = f.size();
@@ -779,13 +839,12 @@ pub fn render_game(f: &mut Frame, app: &App) {
     let main = rows[0];
     let status_area = rows[1];
 
-    // Dynamic cell sizing: fill available height with properly bordered squares.
-    let grid_avail = main.height.saturating_sub(1); // 1 row for column headers
+    let grid_avail = main.height.saturating_sub(1);
     let (cw, ch) = cell_dims(grid_avail);
     let board_w = 3 * cw + 4;
     let board_h = 8 * ch + 9;
 
-    let board_col_w = board_w + 4; // 2-char margin on each side
+    let board_col_w = board_w + 4;
     let panel_w = main.width.saturating_sub(board_col_w) / 2;
 
     let cols = Layout::default()
@@ -803,23 +862,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
     };
 
     let rules = &game_state.rules;
-
-    let path = rules.path_for(game_state.current_player);
-    let pool_selected = app.cursor_path_pos == 0;
-    let bear_off_selected = app.cursor_path_pos == crate::app::CURSOR_BEAR_OFF;
-    let selected_square = if app.cursor_path_pos == 0 {
-        None
-    } else {
-        path.get(app.cursor_path_pos - 1)
-    };
-    let cursor_move = app.legal_move_at_cursor();
-    let target_square = cursor_move.and_then(|mv| match mv.to {
-        PieceLocation::OnBoard(sq) => Some(sq),
-        _ => None,
-    });
-    let target_will_score = cursor_move
-        .map(|mv| matches!(mv.to, PieceLocation::Scored))
-        .unwrap_or(false);
+    let ch_ = cursor_highlights(app, game_state);
 
     // Player panels
     render_player_panel(
@@ -847,30 +890,7 @@ pub fn render_game(f: &mut Frame, app: &App) {
         &app.turn_log[1],
     );
 
-    // Column headers — 1 blank row above for breathing room
-    let header_y = cols[1].y + 1;
-    if header_y < cols[1].y + cols[1].height {
-        let bx_center = cols[1].x + (cols[1].width.saturating_sub(board_w)) / 2;
-        let hbuf = f.buffer_mut();
-        let headers: [(&str, Color); 3] = [
-            ("YOU", COLOR_P1),
-            ("\u{25c6}", Color::DarkGray),
-            ("AI", COLOR_P2),
-        ];
-        for (i, (label, fg)) in headers.iter().enumerate() {
-            let col_x = bx_center + i as u16 * (cw + 1) + 1;
-            let label_w: u16 = label.chars().count() as u16;
-            let pad = cw.saturating_sub(label_w) / 2;
-            for (j, c) in label.chars().enumerate() {
-                let x = col_x + pad + j as u16;
-                if x < cols[1].x + cols[1].width {
-                    hbuf.get_mut(x, header_y)
-                        .set_char(c)
-                        .set_style(Style::default().fg(*fg).add_modifier(Modifier::BOLD));
-                }
-            }
-        }
-    }
+    render_column_headers(f.buffer_mut(), cols[1], board_w, cw);
 
     // Board area (below blank + header rows, vertically centered in remaining space)
     let below_header = main.height.saturating_sub(1);
@@ -885,13 +905,13 @@ pub fn render_game(f: &mut Frame, app: &App) {
     BoardWidget {
         rules,
         board: &game_state.board,
-        selected_square,
-        target_square,
+        selected_square: ch_.selected_square,
+        target_square: ch_.target_square,
         unplayed: game_state.unplayed,
         scored: game_state.scored,
-        pool_selected,
-        bear_off_selected,
-        target_will_score,
+        pool_selected: ch_.pool_selected,
+        bear_off_selected: ch_.bear_off_selected,
+        target_will_score: ch_.target_will_score,
         animation: app.animation.as_ref(),
         cell_w: cw,
         cell_h: ch,
@@ -899,12 +919,11 @@ pub fn render_game(f: &mut Frame, app: &App) {
     .render(board_area, f.buffer_mut());
 
     // Status bar
-    let elapsed = app.stats.elapsed();
     render_status_bar(
         f,
         status_area,
         app.stats.moves,
-        elapsed,
+        app.stats.elapsed(),
         app.log.last().map(|e| e.text.as_str()),
         app.log_visible,
         app.ai_thinking,
