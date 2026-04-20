@@ -1,5 +1,6 @@
 pub mod game;
 pub mod gameover;
+pub mod help;
 pub mod menu;
 pub mod pause;
 pub mod styled_box;
@@ -27,7 +28,7 @@ pub fn render(f: &mut Frame, app: &mut App) {
             } else {
                 title::render(f, app.title_selected);
             }
-            pause::render_help(f, &mut app.help_scroll);
+            help::render_help(f, &mut app.help_scroll);
         }
         crate::app::Screen::GameOver => {
             use crate::ui::gameover::{render, GameOverData};
