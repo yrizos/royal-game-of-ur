@@ -19,12 +19,13 @@ pub fn choose_move(state: &GameState, roll: Dice, depth: u32) -> Move {
 
     moves
         .into_iter()
-        .max_by(|a, b| {
-            move_score(state, a, depth)
-                .partial_cmp(&move_score(state, b, depth))
-                .unwrap_or(std::cmp::Ordering::Equal)
+        .map(|mv| {
+            let score = move_score(state, &mv, depth);
+            (mv, score)
         })
+        .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
         .unwrap()
+        .0
 }
 
 fn move_score(state: &GameState, mv: &Move, depth: u32) -> f64 {
