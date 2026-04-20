@@ -12,6 +12,13 @@ impl Dice {
     pub const MAX: u8 = 4;
 
     /// Creates a `Dice` with the given value, or `None` if `value > 4`.
+    ///
+    /// ```
+    /// use ur_core::dice::Dice;
+    ///
+    /// assert_eq!(Dice::new(3).unwrap().value(), 3);
+    /// assert!(Dice::new(5).is_none());
+    /// ```
     pub const fn new(value: u8) -> Option<Dice> {
         if value > Self::MAX {
             None
@@ -24,6 +31,15 @@ impl Dice {
     ///
     /// Simulates four independent fair binary dice (each 50/50), returning
     /// their sum — a binomial B(4, 0.5) distribution producing values 0–4.
+    ///
+    /// ```
+    /// use ur_core::dice::Dice;
+    /// use rand::{rngs::StdRng, SeedableRng};
+    ///
+    /// let mut rng = StdRng::seed_from_u64(42);
+    /// let roll = Dice::roll(&mut rng);
+    /// assert!(roll.value() <= 4);
+    /// ```
     pub fn roll(rng: &mut impl Rng) -> Self {
         let count: u8 = (0..4).map(|_| rng.gen::<bool>() as u8).sum();
         Dice(count)

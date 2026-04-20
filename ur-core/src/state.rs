@@ -126,6 +126,23 @@ impl GameRules {
     ///
     /// Returns intermediate squares (not the source) up to and including the
     /// destination. Bear-off and scored moves return an empty `Vec`.
+    ///
+    /// ```
+    /// use ur_core::state::{GameRules, GameState};
+    /// use ur_core::dice::Dice;
+    /// use ur_core::board::Square;
+    ///
+    /// let rules = GameRules::finkel();
+    /// let state = GameState::new(&rules);
+    /// let moves = state.legal_moves(Dice::new(3).unwrap());
+    /// let path = rules.move_path(&moves[0]);
+    /// // Entering from pool with roll 3 passes through steps 0, 1, 2.
+    /// assert_eq!(path, vec![
+    ///     Square::new(2, 3),
+    ///     Square::new(2, 2),
+    ///     Square::new(2, 1),
+    /// ]);
+    /// ```
     pub fn move_path(&self, mv: &Move) -> Vec<Square> {
         let to_sq = match mv.to {
             PieceLocation::OnBoard(sq) => sq,
@@ -197,6 +214,18 @@ pub struct GameState {
 
 impl GameState {
     /// Creates a new game in the initial state with all pieces unplayed.
+    ///
+    /// ```
+    /// use ur_core::state::{GameRules, GameState, GamePhase};
+    /// use ur_core::player::Player;
+    ///
+    /// let rules = GameRules::finkel();
+    /// let state = GameState::new(&rules);
+    /// assert_eq!(state.current_player, Player::Player1);
+    /// assert_eq!(state.unplayed, [7, 7]);
+    /// assert_eq!(state.scored, [0, 0]);
+    /// assert_eq!(state.phase, GamePhase::WaitingForRoll);
+    /// ```
     pub fn new(rules: &GameRules) -> Self {
         Self {
             rules: rules.clone(),
@@ -211,6 +240,17 @@ impl GameState {
     /// Returns all legal moves for the current player given `roll`.
     ///
     /// Returns an empty `Vec` if no moves are possible (turn is forfeit).
+    ///
+    /// ```
+    /// use ur_core::state::{GameRules, GameState};
+    /// use ur_core::dice::Dice;
+    ///
+    /// let state = GameState::new(&GameRules::finkel());
+    /// // Roll of 0 always yields no moves.
+    /// assert!(state.legal_moves(Dice::new(0).unwrap()).is_empty());
+    /// // Roll of 1 from the start: one piece can enter.
+    /// assert_eq!(state.legal_moves(Dice::new(1).unwrap()).len(), 1);
+    /// ```
     pub fn legal_moves(&self, roll: Dice) -> Vec<Move> {
         if roll.value() == 0 {
             return Vec::new();
@@ -285,6 +325,19 @@ impl GameState {
     /// # Panics
     ///
     /// Panics if `mv` is not a structurally valid move (piece not present at `from`).
+    ///
+    /// ```
+    /// use ur_core::state::{GameRules, GameState, PieceLocation};
+    /// use ur_core::dice::Dice;
+    /// use ur_core::board::Square;
+    ///
+    /// let state = GameState::new(&GameRules::finkel());
+    /// let moves = state.legal_moves(Dice::new(1).unwrap());
+    /// let result = state.apply_move(moves[0].clone());
+    /// // Piece enters at path step 0 = Square(2,3).
+    /// assert_eq!(moves[0].to, PieceLocation::OnBoard(Square::new(2, 3)));
+    /// assert_eq!(result.new_state.unplayed[0], 6);
+    /// ```
     pub fn apply_move(&self, mv: Move) -> MoveResult {
         let player = self.current_player;
         let mut new_state = self.clone();
@@ -374,6 +427,15 @@ impl GameState {
     ///
     /// Used when `legal_moves` returns empty (roll of 0 or no valid squares).
     /// Returns `None` if the game is already over.
+    ///
+    /// ```
+    /// use ur_core::state::{GameRules, GameState};
+    /// use ur_core::player::Player;
+    ///
+    /// let state = GameState::new(&GameRules::finkel());
+    /// let next = state.forfeit_turn().unwrap();
+    /// assert_eq!(next.current_player, Player::Player2);
+    /// ```
     pub fn forfeit_turn(&self) -> Option<Self> {
         match &self.phase {
             GamePhase::GameOver(_) => None,

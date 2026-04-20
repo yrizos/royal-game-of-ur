@@ -58,6 +58,14 @@ impl BoardShape {
     }
 
     /// Returns true if the given square is a rosette.
+    ///
+    /// ```
+    /// use ur_core::board::{BoardShape, Square};
+    ///
+    /// let board = BoardShape::finkel();
+    /// assert!(board.is_rosette(Square::new(1, 3))); // centre rosette
+    /// assert!(!board.is_rosette(Square::new(1, 2))); // not a rosette
+    /// ```
     pub fn is_rosette(&self, sq: Square) -> bool {
         self.rosettes.contains(&sq)
     }
@@ -104,11 +112,33 @@ impl Path {
     }
 
     /// Returns the square at position `index` along the path, if it exists.
+    ///
+    /// ```
+    /// use ur_core::state::GameRules;
+    /// use ur_core::board::Square;
+    ///
+    /// let rules = GameRules::finkel();
+    /// let path = &rules.path_player1;
+    /// assert_eq!(path.get(0), Some(Square::new(2, 3)));
+    /// assert_eq!(path.get(14), None); // past the end
+    /// ```
     pub fn get(&self, index: usize) -> Option<Square> {
         self.squares.get(index).copied()
     }
 
     /// Returns the index of `sq` in this path, if present.
+    ///
+    /// ```
+    /// use ur_core::state::GameRules;
+    /// use ur_core::board::Square;
+    ///
+    /// let rules = GameRules::finkel();
+    /// let path = &rules.path_player1;
+    /// // The centre rosette is at path step 7 (0-indexed) for both players.
+    /// assert_eq!(path.index_of(Square::new(1, 3)), Some(7));
+    /// // A square not on this path returns None.
+    /// assert_eq!(path.index_of(Square::new(0, 0)), None);
+    /// ```
     pub fn index_of(&self, sq: Square) -> Option<usize> {
         self.squares.iter().position(|&s| s == sq)
     }
