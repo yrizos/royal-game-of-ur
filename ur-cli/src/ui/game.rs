@@ -52,29 +52,30 @@ pub enum PanelDice {
 /// The first `value` dice show a filled pip in `color`; the rest are blank
 /// and drawn in `DarkGray`. When `dim` is true all borders are `DarkGray`
 /// (used for the inactive "last roll" display).
-fn dice_box_lines(value: u8, color: Color, dim: bool) -> Vec<Line<'static>> {
-    let border_color = if dim { Color::DarkGray } else { color };
+/// Shared builder: `filled[i]` determines whether die `i` shows a pip.
+fn build_dice_lines(
+    filled: [bool; 4],
+    pip_color: Color,
+    border_color: Color,
+) -> Vec<Line<'static>> {
     let border = Style::default().fg(border_color);
-
     let mut top_spans = vec![Span::raw("  ")];
     let mut mid_spans = vec![Span::raw("  ")];
     let mut bot_spans = vec![Span::raw("  ")];
 
-    for i in 0..4u8 {
+    for (i, &show) in filled.iter().enumerate() {
         top_spans.push(Span::styled("┌───┐", border));
         bot_spans.push(Span::styled("└───┘", border));
-
         mid_spans.push(Span::styled("│", border));
-        if i < value {
+        if show {
             mid_spans.push(Span::styled(
                 " ▲ ",
-                Style::default().fg(color).add_modifier(Modifier::BOLD),
+                Style::default().fg(pip_color).add_modifier(Modifier::BOLD),
             ));
         } else {
             mid_spans.push(Span::styled("   ", Style::default().fg(Color::DarkGray)));
         }
         mid_spans.push(Span::styled("│", border));
-
         if i < 3 {
             top_spans.push(Span::raw(" "));
             mid_spans.push(Span::raw(" "));
@@ -89,52 +90,21 @@ fn dice_box_lines(value: u8, color: Color, dim: bool) -> Vec<Line<'static>> {
     ]
 }
 
+fn dice_box_lines(value: u8, color: Color, dim: bool) -> Vec<Line<'static>> {
+    let filled = std::array::from_fn(|i| (i as u8) < value);
+    let border_color = if dim { Color::DarkGray } else { color };
+    build_dice_lines(filled, color, border_color)
+}
+
 /// Renders four dice boxes with a rapidly cycling pip pattern to convey rolling.
-///
-/// Each die independently toggles between filled and empty on a different phase
-/// so the dice visibly churn even when the overall count hasn't settled. The
-/// `frame` argument is `frames_remaining` from the animation state — it counts
-/// down from a positive value to 1, giving fresh input every tick.
 fn dice_rolling_lines(frame: u32, color: Color) -> Vec<Line<'static>> {
-    // 4-bit bitmasks: bit i set ⟹ die i shows a filled pip.
-    // The 16-entry table cycles at 2 frames per pattern (~66 ms at 30 fps),
-    // giving a fast random-looking churn across all four dice.
     const PATTERNS: [u8; 16] = [
         0b1010, 0b0101, 0b1100, 0b0011, 0b1001, 0b0110, 0b1111, 0b0000, 0b1110, 0b0111, 0b1011,
         0b1101, 0b0001, 0b1000, 0b0100, 0b0010,
     ];
     let pattern = PATTERNS[((frame / 2) as usize) % PATTERNS.len()];
-
-    let border = Style::default().fg(color);
-    let mut top_spans = vec![Span::raw("  ")];
-    let mut mid_spans = vec![Span::raw("  ")];
-    let mut bot_spans = vec![Span::raw("  ")];
-
-    for i in 0..4u8 {
-        top_spans.push(Span::styled("┌───┐", border));
-        bot_spans.push(Span::styled("└───┘", border));
-        mid_spans.push(Span::styled("│", border));
-        if (pattern >> i) & 1 == 1 {
-            mid_spans.push(Span::styled(
-                " ▲ ",
-                Style::default().fg(color).add_modifier(Modifier::BOLD),
-            ));
-        } else {
-            mid_spans.push(Span::styled("   ", Style::default().fg(Color::DarkGray)));
-        }
-        mid_spans.push(Span::styled("│", border));
-        if i < 3 {
-            top_spans.push(Span::raw(" "));
-            mid_spans.push(Span::raw(" "));
-            bot_spans.push(Span::raw(" "));
-        }
-    }
-
-    vec![
-        Line::from(top_spans),
-        Line::from(mid_spans),
-        Line::from(bot_spans),
-    ]
+    let filled = std::array::from_fn(|i| (pattern >> i) & 1 == 1);
+    build_dice_lines(filled, color, color)
 }
 
 /// Returns exactly 3 `Line`s for the dice box display area. Always 3 lines — never
