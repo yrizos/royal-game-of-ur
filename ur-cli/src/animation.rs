@@ -87,20 +87,21 @@ pub fn tick(app: &mut App) {
 
     // Advance DiceOff screen animation
     if let crate::app::Screen::DiceOff { state } = &mut app.screen {
-        if state.p1_frames > 0 {
-            state.p1_frames -= 1;
-            state.p1_display.cycle();
-            if state.p1_frames == 0 {
-                state.p1_display = state.p1_final;
+        fn tick_die(
+            frames: &mut u32,
+            display: &mut ur_core::dice::Dice,
+            final_val: ur_core::dice::Dice,
+        ) {
+            if *frames > 0 {
+                *frames -= 1;
+                display.cycle();
+                if *frames == 0 {
+                    *display = final_val;
+                }
             }
         }
-        if state.p2_frames > 0 {
-            state.p2_frames -= 1;
-            state.p2_display.cycle();
-            if state.p2_frames == 0 {
-                state.p2_display = state.p2_final;
-            }
-        }
+        tick_die(&mut state.p1_frames, &mut state.p1_display, state.p1_final);
+        tick_die(&mut state.p2_frames, &mut state.p2_display, state.p2_final);
         // Determine winner once both animations complete
         if state.p1_frames == 0 && state.p2_frames == 0 && state.winner.is_none() {
             use ur_core::player::Player;
