@@ -1,3 +1,5 @@
+use std::sync::LazyLock;
+
 use ratatui::{
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -8,6 +10,8 @@ use ratatui::{
 use crate::ui::styled_box::StyledBox;
 
 use super::pause::centered_rect;
+
+static HELP_LINES: LazyLock<Vec<Line<'static>>> = LazyLock::new(help_lines);
 
 // ── Formatting helpers ───────────────────────────────────────────────────────
 
@@ -473,7 +477,7 @@ pub fn render_help(f: &mut Frame, scroll: &mut u16) {
     let popup = centered_rect(72, area.height.saturating_sub(2), area);
     f.render_widget(Clear, popup);
 
-    let lines = help_lines();
+    let lines = &*HELP_LINES;
     let total_lines = lines.len() as u16;
 
     let sb = StyledBox {
@@ -486,5 +490,5 @@ pub fn render_help(f: &mut Frame, scroll: &mut u16) {
     let max_scroll = total_lines.saturating_sub(content.height);
     *scroll = (*scroll).min(max_scroll);
 
-    f.render_widget(Paragraph::new(lines).scroll((*scroll, 0)), content);
+    f.render_widget(Paragraph::new(lines.clone()).scroll((*scroll, 0)), content);
 }
