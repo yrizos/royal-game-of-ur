@@ -13,6 +13,7 @@ pub enum Animation {
     /// Piece moving square by square along a path.
     PieceMove {
         remaining: Vec<Square>,
+        current_idx: usize,
         frames_per_step: u32,
         frames_this_step: u32,
         is_player1: bool,
@@ -44,19 +45,18 @@ pub fn tick_animation(anim: &mut Animation) {
         }
         Animation::PieceMove {
             remaining,
+            current_idx,
             frames_per_step,
             frames_this_step,
             ..
         } => {
             if *frames_this_step > 0 {
                 *frames_this_step -= 1;
-            } else if remaining.is_empty() {
+            } else if *current_idx >= remaining.len() {
                 *anim = Animation::Done;
             } else {
-                remaining.remove(0);
+                *current_idx += 1;
                 *frames_this_step = *frames_per_step;
-                // The outer `else if remaining.is_empty()` branch handles Done
-                // after frames_this_step counts down, ensuring the final square is rendered.
             }
         }
         Animation::CaptureFlash {
@@ -198,19 +198,19 @@ mod tests {
         let sq1 = ur_core::board::Square::new(1, 1);
         let mut anim = Animation::PieceMove {
             remaining: vec![sq0, sq1],
+            current_idx: 0,
             frames_per_step: 2,
-            frames_this_step: 0, // trigger advance immediately
+            frames_this_step: 0,
             is_player1: true,
         };
         tick_animation(&mut anim);
         match &anim {
             Animation::PieceMove {
-                remaining,
+                current_idx,
                 frames_this_step,
                 ..
             } => {
-                assert_eq!(remaining.len(), 1, "first square should have been consumed");
-                assert_eq!(*remaining, vec![sq1]);
+                assert_eq!(*current_idx, 1, "index should advance past first square");
                 assert_eq!(
                     *frames_this_step, 2,
                     "frames_this_step should reset to frames_per_step"
@@ -224,6 +224,7 @@ mod tests {
     fn test_piece_move_completes_when_remaining_empty_and_frame_zero() {
         let mut anim = Animation::PieceMove {
             remaining: vec![],
+            current_idx: 0,
             frames_per_step: 3,
             frames_this_step: 0,
             is_player1: true,
@@ -237,18 +238,19 @@ mod tests {
         let sq = ur_core::board::Square::new(1, 0);
         let mut anim = Animation::PieceMove {
             remaining: vec![sq],
+            current_idx: 0,
             frames_per_step: 3,
-            frames_this_step: 3, // still counting down
+            frames_this_step: 3,
             is_player1: false,
         };
         tick_animation(&mut anim);
         match &anim {
             Animation::PieceMove {
-                remaining,
+                current_idx,
                 frames_this_step,
                 ..
             } => {
-                assert_eq!(remaining.len(), 1, "square should not be consumed yet");
+                assert_eq!(*current_idx, 0, "index should not advance yet");
                 assert_eq!(*frames_this_step, 2);
             }
             _ => panic!("wrong variant"),

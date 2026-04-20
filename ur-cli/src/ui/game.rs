@@ -326,9 +326,11 @@ impl<'a> Widget for BoardWidget<'a> {
             _ => None,
         };
         let piece_move_ghost: Option<Square> = match self.animation {
-            Some(crate::animation::Animation::PieceMove { remaining, .. }) => {
-                remaining.first().copied()
-            }
+            Some(crate::animation::Animation::PieceMove {
+                remaining,
+                current_idx,
+                ..
+            }) => remaining.get(*current_idx).copied(),
             _ => None,
         };
         let ghost_is_p1: bool = matches!(

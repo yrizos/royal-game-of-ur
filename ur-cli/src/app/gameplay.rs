@@ -217,6 +217,7 @@ impl App {
                 let is_player1 = mv.piece.player == Player::Player1;
                 self.animation = Some(Animation::PieceMove {
                     remaining: path_squares,
+                    current_idx: 0,
                     frames_per_step: 7,
                     frames_this_step: 7,
                     is_player1,
@@ -544,6 +545,7 @@ mod tests {
         app.roll_after = Some(std::time::Instant::now() - std::time::Duration::from_millis(1));
         app.animation = Some(Animation::PieceMove {
             remaining: vec![],
+            current_idx: 0,
             frames_per_step: 3,
             frames_this_step: 3,
             is_player1: true,
