@@ -51,8 +51,8 @@ impl App {
     ///
     /// Only allowed during Player1's turn, in `WaitingForRoll` phase, when no
     /// animation is currently running and no roll is already pending.
-    #[allow(dead_code)]
-    pub fn handle_roll_dice(&mut self) {
+    #[cfg(test)]
+    pub(crate) fn handle_roll_dice(&mut self) {
         let gs = match &self.game_state {
             Some(gs) => gs,
             None => return,
