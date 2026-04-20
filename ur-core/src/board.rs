@@ -21,7 +21,9 @@ impl Square {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BoardShape {
     valid_squares: Vec<Square>,
-    rosettes: Vec<Square>,
+    rosettes_list: Vec<Square>,
+    valid_grid: [bool; 24],
+    rosette_grid: [bool; 24],
 }
 
 impl BoardShape {
@@ -31,30 +33,38 @@ impl BoardShape {
     /// Rosettes: (0,0), (0,6), (1,3), (2,0), (2,6).
     pub fn finkel() -> Self {
         let mut valid_squares = Vec::with_capacity(20);
+        let mut valid_grid = [false; 24];
         for row in 0u8..3 {
             for col in 0u8..8 {
                 if row != 1 && (col == 4 || col == 5) {
-                    continue; // these squares don't exist
+                    continue;
                 }
                 valid_squares.push(Square::new(row, col));
+                valid_grid[row as usize * 8 + col as usize] = true;
             }
         }
-        let rosettes = vec![
+        let rosettes_list = vec![
             Square::new(0, 0),
             Square::new(0, 6),
             Square::new(1, 3),
             Square::new(2, 0),
             Square::new(2, 6),
         ];
+        let mut rosette_grid = [false; 24];
+        for sq in &rosettes_list {
+            rosette_grid[sq.row as usize * 8 + sq.col as usize] = true;
+        }
         Self {
             valid_squares,
-            rosettes,
+            rosettes_list,
+            valid_grid,
+            rosette_grid,
         }
     }
 
     /// Returns true if the given square exists on this board.
     pub fn is_valid(&self, sq: Square) -> bool {
-        self.valid_squares.contains(&sq)
+        self.valid_grid[sq.row as usize * 8 + sq.col as usize]
     }
 
     /// Returns true if the given square is a rosette.
@@ -67,7 +77,7 @@ impl BoardShape {
     /// assert!(!board.is_rosette(Square::new(1, 2))); // not a rosette
     /// ```
     pub fn is_rosette(&self, sq: Square) -> bool {
-        self.rosettes.contains(&sq)
+        self.rosette_grid[sq.row as usize * 8 + sq.col as usize]
     }
 
     /// Returns all valid squares on this board.
@@ -77,7 +87,7 @@ impl BoardShape {
 
     /// Returns all rosette squares on this board.
     pub fn rosettes(&self) -> &[Square] {
-        &self.rosettes
+        &self.rosettes_list
     }
 }
 
