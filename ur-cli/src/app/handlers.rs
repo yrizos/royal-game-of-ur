@@ -106,45 +106,26 @@ impl App {
         self.help_scroll = self.help_scroll.saturating_add(1);
     }
 
-    pub fn handle_menu_up(&mut self) {
+    fn menu_selected_mut(&mut self) -> Option<(&mut usize, usize)> {
         match &mut self.screen {
-            Screen::Title => {
-                if self.title_selected > 0 {
-                    self.title_selected -= 1;
-                }
-            }
-            Screen::DifficultySelect { selected } => {
-                if *selected > 0 {
-                    *selected -= 1;
-                }
-            }
-            Screen::PauseMenu { selected } => {
-                if *selected > 0 {
-                    *selected -= 1;
-                }
-            }
-            _ => {}
+            Screen::Title => Some((&mut self.title_selected, 2)),
+            Screen::DifficultySelect { selected } => Some((selected, 2)),
+            Screen::PauseMenu { selected } => Some((selected, 2)),
+            _ => None,
+        }
+    }
+
+    pub fn handle_menu_up(&mut self) {
+        if let Some((sel, _)) = self.menu_selected_mut() {
+            *sel = sel.saturating_sub(1);
         }
     }
 
     pub fn handle_menu_down(&mut self) {
-        match &mut self.screen {
-            Screen::Title => {
-                if self.title_selected < 2 {
-                    self.title_selected += 1;
-                }
+        if let Some((sel, max)) = self.menu_selected_mut() {
+            if *sel < max {
+                *sel += 1;
             }
-            Screen::DifficultySelect { selected } => {
-                if *selected < 2 {
-                    *selected += 1;
-                }
-            }
-            Screen::PauseMenu { selected } => {
-                if *selected < 2 {
-                    *selected += 1;
-                }
-            }
-            _ => {}
         }
     }
 }
