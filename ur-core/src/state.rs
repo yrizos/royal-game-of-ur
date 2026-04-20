@@ -468,22 +468,15 @@ impl GameState {
     /// Assigns the lowest piece index not currently on the board for this player.
     fn next_entering_piece(&self) -> Piece {
         let player = self.current_player;
-        let mut on_board: Vec<u8> = self
-            .rules
-            .board_shape
-            .valid_squares()
-            .iter()
-            .filter_map(|&sq| self.board.get(sq))
-            .filter(|p| p.player == player)
-            .map(|p| p.index)
-            .collect();
-        on_board.sort_unstable();
-        let mut next = 0u8;
-        for idx in on_board {
-            if idx == next {
-                next += 1;
+        let mut used = [false; 7];
+        for &sq in self.rules.board_shape.valid_squares() {
+            if let Some(p) = self.board.get(sq) {
+                if p.player == player {
+                    used[p.index as usize] = true;
+                }
             }
         }
+        let next = used.iter().position(|&u| !u).unwrap_or(0) as u8;
         Piece::new(player, next)
     }
 
