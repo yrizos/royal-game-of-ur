@@ -17,6 +17,12 @@ impl Square {
     }
 }
 
+impl std::fmt::Display for Square {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "({},{})", self.row, self.col)
+    }
+}
+
 /// Defines which squares exist on the board and which are rosettes.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BoardShape {

@@ -20,7 +20,7 @@ fn play_random_game(rng: &mut StdRng) -> (Player, GameState) {
                 let roll = Dice::roll(rng);
                 let moves = state.legal_moves(roll);
                 if moves.is_empty() {
-                    state = state.pass_turn();
+                    state = state.forfeit_turn().unwrap();
                 } else {
                     let idx = (rng.next_u32() as usize) % moves.len();
                     let result = state.apply_move(moves[idx].clone());

@@ -1,4 +1,5 @@
 use rand::Rng;
+use std::fmt;
 
 /// The result of rolling four binary tetrahedral dice, producing a value 0–4.
 ///
@@ -54,6 +55,12 @@ impl Dice {
     /// Used for animating dice rolls.
     pub fn cycle(&mut self) {
         self.0 = (self.0 + 1) % 5;
+    }
+}
+
+impl fmt::Display for Dice {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 

@@ -421,7 +421,7 @@ impl GameState {
     /// Passes the turn to the opponent without a move.
     ///
     /// Call this when `legal_moves()` returns empty (turn forfeited).
-    pub fn pass_turn(&self) -> GameState {
+    pub(crate) fn pass_turn(&self) -> GameState {
         let mut new_state = self.clone();
         new_state.current_player = self.current_player.opponent();
         new_state.phase = GamePhase::WaitingForRoll;
